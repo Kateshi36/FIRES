@@ -11,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.fires.data.repository.AuthRepository
 import com.example.fires.ui.auth.LoginScreen
+import com.example.fires.ui.auth.PermissionScreen
 import com.example.fires.ui.auth.ProfileSetupScreen
 import com.example.fires.ui.auth.SignUpScreen
 import com.example.fires.ui.auth.SplashScreen
@@ -51,10 +52,15 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             })
         }
         composable(Routes.PERMISSION) {
-            PlaceholderScreen(
-                title = "Allow location",
-                note = "Placeholder. Phase C: real permission request (location + notifications).",
-                actions = listOf(PlaceholderAction("Continue") { go(Routes.LOGIN) })
+            PermissionScreen(
+                onContinue = {
+                    navController.navigate(Routes.LOGIN) {
+                        // Remove the permission screen from the back stack. Otherwise Back from
+                        // login would return here, and this screen moves on by itself when
+                        // permission is already granted, trapping the person in a loop.
+                        popUpTo(Routes.PERMISSION) { inclusive = true }
+                    }
+                }
             )
         }
         composable(Routes.LOGIN) {
