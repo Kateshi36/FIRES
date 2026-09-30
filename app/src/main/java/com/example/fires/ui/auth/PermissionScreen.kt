@@ -1,8 +1,6 @@
 package com.example.fires.ui.auth
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -29,6 +27,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.GpsOff
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,7 +36,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -51,94 +49,121 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.fires.ui.common.PrimaryButton
 import com.example.fires.ui.common.SecondaryButton
+import com.example.fires.ui.common.rememberLocationAccess
 import com.example.fires.ui.theme.FIRESTheme
-import com.example.fires.util.LocationChecks
 import com.example.fires.util.LocationGate
-import com.example.fires.util.resolveLocationGate
+import com.example.fires.util.NotificationChecks
+import com.example.fires.util.PermissionStep
+import com.example.fires.util.resolvePermissionStep
 
 /**
  * Permission screen (C8). Shown once to people who are not logged in, before the login screen.
  *
- * 1. Explains why the app wants location, then asks for it.
- * 2. If the person says no: a prompt with "Try again" and "Open settings".
- * 3. If location permission is fine but the phone's GPS switch is off: a prompt to turn it on.
+ * Step 1, location: explain why, ask, and handle "denied" and "GPS off" (see [LocationGate]).
+ * Step 2, notifications: only on Android 13+ and only if not granted. On older phones this step
+ *         never appears, so nothing is shown or asked.
  *
- * As soon as permission is granted AND GPS is on, it moves on by itself. "Skip for now" is also
- * offered, so nobody is stuck here: responders do not need GPS to log in, and a citizen can
- * still mark the fire on the map by hand.
+ * Nobody can get stuck here. Each step has a way out that works whatever the answer was:
+ * "Continue without location" and "Not now". After the notification prompt the screen moves on
+ * whether the person allowed it or not. It also moves on by itself when nothing is left to ask.
  *
- * There is no ViewModel: everything shown comes from Android itself (permission state, GPS
- * switch), which is re-read whenever the screen comes back into view.
- *
- * @param onContinue called once, when the person is ready or taps Skip.
+ * @param onContinue called once, when there is nothing left to ask.
  */
 @Composable
 fun PermissionScreen(onContinue: () -> Unit) {
     val context = LocalContext.current
-    val activity = remember(context) { context.findActivity() }
 
     // The effect below outlives the first composition, so it must call the newest lambda.
     val currentOnContinue by rememberUpdatedState(onContinue)
 
-    // Bumped whenever something may have changed outside our control (coming back from
-    // Settings, answering a dialog). Reading it makes the checks below run again.
-    var refresh by remember { mutableIntStateOf(0) }
-    LifecycleResumeEffect(Unit) {
-        refresh++
-        onPauseOrDispose { }
-    }
+    val location = rememberLocationAccess()
 
-    // Survive rotation, otherwise the "denied" prompt would vanish when the phone is turned.
-    var wasDenied by rememberSaveable { mutableStateOf(false) }
-    var canAskAgain by rememberSaveable { mutableStateOf(true) }
+    // Saved so rotating the phone does not send the person back to a step they already finished.
+    var locationSkipped by rememberSaveable { mutableStateOf(false) }
+    var notificationsAnswered by rememberSaveable { mutableStateOf(false) }
 
-    val hasPermission = remember(refresh) { LocationChecks.hasLocationPermission(context) }
-    val gpsEnabled = remember(refresh) { LocationChecks.isLocationEnabled(context) }
-    val gate = resolveLocationGate(hasPermission, gpsEnabled, wasDenied, canAskAgain)
+    // Android 12 and older: false, so the notifications step is skipped silently.
+    val notificationsNeeded = remember { NotificationChecks.needsPrompt(context) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        if (results.values.none { it }) {
-            wasDenied = true
-            // After a denial Android says "rationale = true" while it is still willing to ask
-            // again. Once that turns false (denied twice), only Settings can grant it.
-            canAskAgain = activity != null && LocationChecks.PERMISSIONS.any {
-                ActivityCompat.shouldShowRequestPermissionRationale(activity, it)
-            }
-        }
-        refresh++
-    }
+    // Any answer (Allow or Don't allow) counts as answered: a denial must never block the way.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { notificationsAnswered = true }
 
-    // Result of Google's "Turn on device location?" dialog. Yes or no, just look again.
-    val gpsDialogLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult()
-    ) { refresh++ }
+    val step = resolvePermissionStep(
+        locationGate = location.gate,
+        locationSkipped = locationSkipped,
+        notificationsNeeded = notificationsNeeded,
+        notificationsAnswered = notificationsAnswered
+    )
 
-    LaunchedEffect(gate) {
-        if (gate == LocationGate.Ready) currentOnContinue()
+    LaunchedEffect(step) {
+        if (step == PermissionStep.Done) currentOnContinue()
     }
 
     PermissionContent(
-        gate = gate,
-        onAllow = { permissionLauncher.launch(LocationChecks.PERMISSIONS) },
-        onTryAgain = { permissionLauncher.launch(LocationChecks.PERMISSIONS) },
-        onOpenAppSettings = { LocationChecks.openAppSettings(context) },
-        onTurnOnGps = {
-            LocationChecks.promptEnableLocation(
-                context = context,
-                launcher = gpsDialogLauncher,
-                onAlreadyOn = { refresh++ },
-                onFallback = { LocationChecks.openLocationSettings(context) }
-            )
-        },
-        onOpenLocationSettings = { LocationChecks.openLocationSettings(context) },
-        onSkip = { currentOnContinue() }
+        step = step,
+        actions = PermissionActions(
+            onAllowLocation = location.requestPermission,
+            onTryAgain = location.requestPermission,
+            onOpenAppSettings = location.openAppSettings,
+            onTurnOnGps = location.turnOnGps,
+            onOpenLocationSettings = location.openLocationSettings,
+            onSkipLocation = { locationSkipped = true },
+            onAllowNotifications = {
+                // Only reachable on Android 13+, where this permission exists.
+                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            },
+            onSkipNotifications = { notificationsAnswered = true }
+        )
     )
+}
+
+/** Every button on the screen. Defaults to "do nothing" so previews stay short. */
+data class PermissionActions(
+    val onAllowLocation: () -> Unit = {},
+    val onTryAgain: () -> Unit = {},
+    val onOpenAppSettings: () -> Unit = {},
+    val onTurnOnGps: () -> Unit = {},
+    val onOpenLocationSettings: () -> Unit = {},
+    val onSkipLocation: () -> Unit = {},
+    val onAllowNotifications: () -> Unit = {},
+    val onSkipNotifications: () -> Unit = {}
+)
+
+private data class StepText(val icon: ImageVector, val title: String, val body: String)
+
+/** Title and explanation for a step. Null when there is nothing to show (the screen is leaving). */
+private fun stepText(step: PermissionStep): StepText? = when (step) {
+    is PermissionStep.Location -> when (step.gate) {
+        LocationGate.AskPermission -> StepText(
+            icon = Icons.Filled.LocationOn,
+            title = "Allow location access",
+            body = "F.I.R.E.S. uses your location to show responders exactly where a fire " +
+                "is, so help can reach you faster."
+        )
+        is LocationGate.PermissionDenied -> StepText(
+            icon = Icons.Filled.LocationOff,
+            title = "Location permission denied",
+            body = "Without it, the app cannot find you automatically. You can still mark " +
+                "the fire on the map by hand, but GPS is faster and more accurate in an emergency."
+        )
+        LocationGate.GpsOff -> StepText(
+            icon = Icons.Filled.GpsOff,
+            title = "Turn on your location (GPS)",
+            body = "Location access is allowed, but your phone's location switch is off. " +
+                "Turn it on so your reports carry your exact position."
+        )
+        LocationGate.Ready -> null
+    }
+    PermissionStep.Notifications -> StepText(
+        icon = Icons.Filled.NotificationsActive,
+        title = "Get emergency alerts",
+        body = "Allow notifications so F.I.R.E.S. can alert you right away, even when the app is closed."
+    )
+    PermissionStep.Done -> null
 }
 
 /**
@@ -147,45 +172,16 @@ fun PermissionScreen(onContinue: () -> Unit) {
  */
 @Composable
 fun PermissionContent(
-    gate: LocationGate,
-    onAllow: () -> Unit,
-    onTryAgain: () -> Unit,
-    onOpenAppSettings: () -> Unit,
-    onTurnOnGps: () -> Unit,
-    onOpenLocationSettings: () -> Unit,
-    onSkip: () -> Unit
+    step: PermissionStep,
+    actions: PermissionActions
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surface
     ) {
-        // Ready means we are already leaving this screen, so draw nothing (avoids a flash).
-        if (gate == LocationGate.Ready) return@Surface
-
-        val icon: ImageVector
-        val title: String
-        val body: String
-        when (gate) {
-            LocationGate.AskPermission -> {
-                icon = Icons.Filled.LocationOn
-                title = "Allow location access"
-                body = "F.I.R.E.S. uses your location to show responders exactly where a fire " +
-                    "is, so help can reach you faster."
-            }
-            is LocationGate.PermissionDenied -> {
-                icon = Icons.Filled.LocationOff
-                title = "Location permission denied"
-                body = "Without it, the app cannot find you automatically. You can still mark " +
-                    "the fire on the map by hand, but GPS is faster and more accurate in an emergency."
-            }
-            LocationGate.GpsOff -> {
-                icon = Icons.Filled.GpsOff
-                title = "Turn on your location (GPS)"
-                body = "Location access is allowed, but your phone's location switch is off. " +
-                    "Turn it on so your reports carry your exact position."
-            }
-            LocationGate.Ready -> return@Surface // handled above, needed to make `when` exhaustive
-        }
+        // Nothing to show means we are already leaving this screen. Draw nothing (avoids a flash).
+        val text = stepText(step) ?: return@Surface
+        val locationGate = (step as? PermissionStep.Location)?.gate
 
         BoxWithConstraints(
             modifier = Modifier
@@ -206,32 +202,38 @@ fun PermissionContent(
                         .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    IconBadge(icon)
+                    IconBadge(text.icon)
                     Spacer(Modifier.height(20.dp))
                     Text(
-                        text = title,
+                        text = text.title,
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = body,
+                        text = text.body,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
 
-                    // The two short reasons only on the first ask. Later screens are about fixing.
-                    if (gate == LocationGate.AskPermission) {
+                    // Short reasons only on the two "ask" screens. The fix-it screens need none.
+                    if (locationGate == LocationGate.AskPermission) {
                         Spacer(Modifier.height(16.dp))
                         ReasonRow("Pins your report at the exact spot of the fire")
                         Spacer(Modifier.height(8.dp))
                         ReasonRow("Helps B-FLARE and BDRRMO find you quickly")
                     }
+                    if (step == PermissionStep.Notifications) {
+                        Spacer(Modifier.height(16.dp))
+                        ReasonRow("Know when your report is verified")
+                        Spacer(Modifier.height(8.dp))
+                        ReasonRow("Get replies from responders right away")
+                    }
 
                     // Android stops showing the dialog after two denials, so say what to do instead.
-                    if (gate is LocationGate.PermissionDenied && !gate.canAskAgain) {
+                    if (locationGate is LocationGate.PermissionDenied && !locationGate.canAskAgain) {
                         Spacer(Modifier.height(16.dp))
                         ErrorBanner(
                             "Android won't show the request again. Tap Open settings, then " +
@@ -241,33 +243,50 @@ fun PermissionContent(
 
                     Spacer(Modifier.height(28.dp))
 
-                    when (gate) {
-                        LocationGate.AskPermission ->
-                            PrimaryButton(text = "Allow location", onClick = onAllow)
+                    when (step) {
+                        is PermissionStep.Location -> {
+                            when (val gate = step.gate) {
+                                LocationGate.AskPermission ->
+                                    PrimaryButton(text = "Allow location", onClick = actions.onAllowLocation)
 
-                        is LocationGate.PermissionDenied -> {
-                            if (gate.canAskAgain) {
-                                // "Try again" only when Android will actually show the dialog.
-                                PrimaryButton(text = "Try again", onClick = onTryAgain)
-                                Spacer(Modifier.height(12.dp))
-                                SecondaryButton(text = "Open settings", onClick = onOpenAppSettings)
-                            } else {
-                                PrimaryButton(text = "Open settings", onClick = onOpenAppSettings)
+                                is LocationGate.PermissionDenied -> {
+                                    if (gate.canAskAgain) {
+                                        // "Try again" only when Android will actually show the dialog.
+                                        PrimaryButton(text = "Try again", onClick = actions.onTryAgain)
+                                        Spacer(Modifier.height(12.dp))
+                                        SecondaryButton(text = "Open settings", onClick = actions.onOpenAppSettings)
+                                    } else {
+                                        PrimaryButton(text = "Open settings", onClick = actions.onOpenAppSettings)
+                                    }
+                                }
+
+                                LocationGate.GpsOff -> {
+                                    PrimaryButton(text = "Turn on GPS", onClick = actions.onTurnOnGps)
+                                    Spacer(Modifier.height(12.dp))
+                                    SecondaryButton(
+                                        text = "Open location settings",
+                                        onClick = actions.onOpenLocationSettings
+                                    )
+                                }
+
+                                LocationGate.Ready -> Unit
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            // Always works. Moves on to the next step (notifications) or to login.
+                            TextButton(onClick = actions.onSkipLocation) {
+                                Text("Continue without location", style = MaterialTheme.typography.labelLarge)
                             }
                         }
 
-                        LocationGate.GpsOff -> {
-                            PrimaryButton(text = "Turn on GPS", onClick = onTurnOnGps)
-                            Spacer(Modifier.height(12.dp))
-                            SecondaryButton(text = "Open location settings", onClick = onOpenLocationSettings)
+                        PermissionStep.Notifications -> {
+                            PrimaryButton(text = "Allow notifications", onClick = actions.onAllowNotifications)
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(onClick = actions.onSkipNotifications) {
+                                Text("Not now", style = MaterialTheme.typography.labelLarge)
+                            }
                         }
 
-                        LocationGate.Ready -> Unit
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = onSkip) {
-                        Text("Skip for now", style = MaterialTheme.typography.labelLarge)
+                        PermissionStep.Done -> Unit
                     }
                 }
             }
@@ -315,46 +334,39 @@ private fun ReasonRow(text: String) {
     }
 }
 
-/** The screen's Context may be wrapped (themes etc.). Unwrap until we find the Activity. */
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
-
 // ---------- Previews ----------
 
 @Composable
-private fun PermissionPreviewBody(gate: LocationGate) {
-    FIRESTheme {
-        PermissionContent(
-            gate = gate,
-            onAllow = {}, onTryAgain = {}, onOpenAppSettings = {},
-            onTurnOnGps = {}, onOpenLocationSettings = {}, onSkip = {}
-        )
-    }
+private fun PermissionPreviewBody(step: PermissionStep) {
+    FIRESTheme { PermissionContent(step = step, actions = PermissionActions()) }
 }
 
-@Preview(name = "Permission - ask", showSystemUi = true)
+@Preview(name = "Permission - ask location", showSystemUi = true)
 @Composable
 private fun PermissionAskPreview() {
-    PermissionPreviewBody(LocationGate.AskPermission)
+    PermissionPreviewBody(PermissionStep.Location(LocationGate.AskPermission))
 }
 
 @Preview(name = "Permission - denied (can ask again)", showSystemUi = true)
 @Composable
 private fun PermissionDeniedPreview() {
-    PermissionPreviewBody(LocationGate.PermissionDenied(canAskAgain = true))
+    PermissionPreviewBody(PermissionStep.Location(LocationGate.PermissionDenied(canAskAgain = true)))
 }
 
 @Preview(name = "Permission - denied for good", showSystemUi = true)
 @Composable
 private fun PermissionDeniedForGoodPreview() {
-    PermissionPreviewBody(LocationGate.PermissionDenied(canAskAgain = false))
+    PermissionPreviewBody(PermissionStep.Location(LocationGate.PermissionDenied(canAskAgain = false)))
 }
 
 @Preview(name = "Permission - GPS off", showSystemUi = true)
 @Composable
 private fun PermissionGpsOffPreview() {
-    PermissionPreviewBody(LocationGate.GpsOff)
+    PermissionPreviewBody(PermissionStep.Location(LocationGate.GpsOff))
+}
+
+@Preview(name = "Permission - notifications", showSystemUi = true)
+@Composable
+private fun PermissionNotificationsPreview() {
+    PermissionPreviewBody(PermissionStep.Notifications)
 }

@@ -36,7 +36,7 @@ object AuthErrors {
     /** Sign-up half-finished: the account exists but users/{uid} was not saved. */
     const val MSG_PROFILE_SAVE =
         "Your account was created, but we could not save your details. " +
-            "Check your connection and tap Try again."
+                "Check your connection and tap Try again."
 
     /** Sign-up was interrupted by a sign-out, so there is nothing left to retry. */
     const val MSG_SIGNED_OUT =
@@ -73,19 +73,18 @@ object AuthErrors {
     }
 
     /**
-     * Anything not matched above. Setup problems get their own message. Otherwise the error code
-     * is added in brackets so a failed sign-up can be diagnosed from the screen alone.
-     * TODO: drop the bracket once sign-up is stable.
+     * Catches project setup issues explicitly and falls back to a clean user-facing error message.
      */
     private fun signUpFallback(e: Throwable): String {
         val code = (e as? FirebaseAuthException)?.errorCode
         val text = e.message.orEmpty()
-        return when {
-            code == "ERROR_OPERATION_NOT_ALLOWED" ||
-                text.contains("CONFIGURATION_NOT_FOUND") ||
-                text.contains("OPERATION_NOT_ALLOWED") -> MSG_SIGNUP_SETUP
-            code != null -> "$MSG_SIGNUP_FALLBACK ($code)"
-            else -> "$MSG_SIGNUP_FALLBACK (${e.javaClass.simpleName})"
+        return if (code == "ERROR_OPERATION_NOT_ALLOWED" ||
+            text.contains("CONFIGURATION_NOT_FOUND") ||
+            text.contains("OPERATION_NOT_ALLOWED")
+        ) {
+            MSG_SIGNUP_SETUP
+        } else {
+            MSG_SIGNUP_FALLBACK
         }
     }
 
@@ -94,8 +93,8 @@ object AuthErrors {
         e is FirebaseTooManyRequestsException -> MSG_TOO_MANY
         e is TimeoutCancellationException -> MSG_NETWORK
         e is FirebaseFirestoreException &&
-            (e.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
-                e.code == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED) -> MSG_NETWORK
+                (e.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+                        e.code == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED) -> MSG_NETWORK
         else -> null
     }
 }

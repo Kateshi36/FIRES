@@ -1,1 +1,5 @@
 /build
+
+# Firebase config (contains the API key)
+google-services.json
+app/google-services.json
