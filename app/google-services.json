@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "169547183772",
+    "project_id": "fires-a81c0",
+    "storage_bucket": "fires-a81c0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:169547183772:android:9f68b200c91a7babea5f59",
+        "android_client_info": {
+          "package_name": "com.example.fires"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1p87v-JtTw5JKi5gncO1exhcfCbHj94o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
