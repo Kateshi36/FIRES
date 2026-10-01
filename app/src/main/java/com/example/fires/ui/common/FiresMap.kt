@@ -50,7 +50,11 @@ data class MapPoint(
     val latitude: Double,
     val longitude: Double,
     val title: String = "",
-    val color: Color = Color(0xFFE8352A)
+    val color: Color = Color(0xFFE8352A),
+    /** Outline color. The dashboard uses it for the status, with [color] for the severity. */
+    val ringColor: Color? = null,
+    /** Dashed outline and a bigger dot, to stand out. The dashboard uses it for flagged reports. */
+    val highlighted: Boolean = false
 )
 
 /** Fallback map center (Manila) until we have the real GPS fix. TODO: set to Barangay Bagumbayan. */
@@ -72,7 +76,9 @@ fun FiresMap(
     userLocation: LatLon? = null,
     pin: LatLon? = null,
     onPinChange: ((LatLon) -> Unit)? = null,
-    onMarkerClick: ((String) -> Unit)? = null
+    onMarkerClick: ((String) -> Unit)? = null,
+    /** Change this number to make the map glide back to [center], even if [center] itself did not change. */
+    recenterKey: Int = 0
 ) {
     // Android Studio's preview cannot run osmdroid, so draw a stand-in there. The real map is unchanged.
     if (LocalInspectionMode.current) {
@@ -108,7 +114,7 @@ fun FiresMap(
         }
     }
 
-    LaunchedEffect(center) {
+    LaunchedEffect(center, recenterKey) {
         mapView.controller.animateTo(GeoPoint(center.latitude, center.longitude))
     }
 
@@ -137,7 +143,14 @@ fun FiresMap(
                     Marker(map).apply {
                         position = GeoPoint(point.latitude, point.longitude)
                         title = point.title
-                        icon = circleIcon(context, point.color.toArgb(), sizeDp = 26)
+                        icon = circleIcon(
+                            context,
+                            point.color.toArgb(),
+                            sizeDp = if (point.highlighted) 36 else 26,
+                            strokeColor = point.ringColor?.toArgb() ?: android.graphics.Color.WHITE,
+                            strokeDp = if (point.ringColor != null) 5 else 3,
+                            dashed = point.highlighted
+                        )
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         setOnMarkerClickListener { _, _ ->
                             onMarkerClick?.invoke(point.id)
@@ -189,14 +202,20 @@ private fun circleIcon(
     context: Context,
     color: Int,
     sizeDp: Int,
-    strokeColor: Int = android.graphics.Color.WHITE
+    strokeColor: Int = android.graphics.Color.WHITE,
+    strokeDp: Int = 3,
+    dashed: Boolean = false
 ): Drawable {
     val density = context.resources.displayMetrics.density
     val px = (sizeDp * density).toInt()
     return GradientDrawable().apply {
         shape = GradientDrawable.OVAL
         setColor(color)
-        setStroke((3 * density).toInt(), strokeColor)
+        if (dashed) {
+            setStroke((strokeDp * density).toInt(), strokeColor, 7 * density, 4 * density)
+        } else {
+            setStroke((strokeDp * density).toInt(), strokeColor)
+        }
         setSize(px, px)
         setBounds(0, 0, px, px)
     }

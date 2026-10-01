@@ -131,8 +131,8 @@ object Validators {
     }
 
     /**
-     * Profile setup form. Purok has no rule (the official purok list is still to be confirmed
-     * with B-FLARE, so it is optional free text for now). The contact number is only checked when
+     * Profile setup form. Purok has no rule: it is optional and is picked from a dropdown (see
+     * data/Puroks.kt, whose list still has to be confirmed with B-FLARE). The contact number is only checked when
      * the screen actually shows that field (requireContact), see ProfileSetupViewModel.
      */
     fun validateProfile(

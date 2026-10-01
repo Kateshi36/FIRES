@@ -31,6 +31,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.fires.data.Puroks
+import com.example.fires.ui.common.LabeledDropdown
 import com.example.fires.ui.common.LabeledTextField
 import com.example.fires.ui.common.PrimaryButton
 import com.example.fires.ui.navigation.toRoute
@@ -211,11 +213,13 @@ private fun ProfileForm(
         enabled = enabled
     )
     Spacer(Modifier.height(12.dp))
-    LabeledTextField(
+    LabeledDropdown(
         label = "Purok (optional)",
         value = state.purok,
-        onValueChange = onPurokChange,
-        placeholder = "Purok 3",
+        options = Puroks.ALL,
+        onOptionSelected = onPurokChange,
+        placeholder = "Select your purok",
+        noSelectionLabel = "Not specified",
         enabled = enabled
     )
     Spacer(Modifier.height(12.dp))
@@ -282,6 +286,12 @@ private fun ProfileLoadingPreview() = PreviewContent(ProfileSetupUiState())
 @Preview(name = "Profile setup - empty", showSystemUi = true)
 @Composable
 private fun ProfileEmptyPreview() = PreviewContent(loadedState)
+
+@Preview(name = "Profile setup - purok chosen", showSystemUi = true)
+@Composable
+private fun ProfilePurokChosenPreview() = PreviewContent(
+    loadedState.copy(address = "123 Rizal St.", purok = Puroks.ALL.first())
+)
 
 @Preview(name = "Profile setup - blank field errors", showSystemUi = true)
 @Composable

@@ -45,6 +45,7 @@ data class Incident(
     var peopleAtRisk: Int = 0,
     var vulnerablePersons: List<String> = emptyList(),
     var trapped: Boolean = false,
+    var hazards: List<String> = emptyList(), // HazardType values, e.g. "lpg_tank"
     var hasPhoto: Boolean = false,
 
     var status: String = IncidentStatus.REPORTED.value,

@@ -13,9 +13,18 @@
     <!-- Notifications (Android 13+ needs a runtime prompt) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Responder alert service (Phase F). The <service> tag is added in Phase F -->
+    <!-- Responder alert service (Phase F). The <service> tag is inside <application> below -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!--
+      Battery optimization (F1.13). Lets the responder allow F.I.R.E.S. to ignore battery
+      optimization, so Android does not put the alert service to sleep. Only used to show the
+      system's own "Allow" dialog. Note: Google Play restricts this permission to apps whose core
+      function needs it, so check the policy before a Play Store release (an APK for evaluators
+      is not affected).
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!--
       No CAMERA permission on purpose: photos are taken through the system camera
@@ -39,6 +48,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.FIRES"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -47,6 +57,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Responder alert listener (F1.3). Not exported: only this app can start it.
+          specialUse, not dataSync: on Android 15+ a dataSync service is stopped after about 6 hours,
+          and this one has to run all day. The subtype text is required with specialUse and is what
+          Google Play asks about at review (an APK for evaluators does not go through that).
+          The class itself is added in F1.5.
+        -->
+        <service
+            android:name=".service.ResponderAlertService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a live listener on new fire reports so responders are alerted while the app is closed" />
+        </service>
     </application>
 
 </manifest>

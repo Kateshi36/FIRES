@@ -1,0 +1,336 @@
+rules_version = '2';
+
+/*
+ * F.I.R.E.S. Firestore security rules (Phase G1).
+ *
+ * Three roles, read from users/{uid}.role: citizen, responder, admin.
+ *   - A citizen creates their own reports and reads only their own reports and chats.
+ *     They can never change a report afterwards (status, severity, flags, anything).
+ *   - A responder (and an admin, who uses the same screens) reads every report, changes only
+ *     status, verification and severity, and writes assignments, records and chat messages.
+ *   - Only an admin can change a role. In the app nobody can: a citizen can edit their own
+ *     profile fields and nothing else. Responder accounts are made in the Console (or by an
+ *     admin on the website later).
+ *
+ * Everything not listed here is denied. The Firebase Console and the Admin SDK are not affected
+ * by these rules, so they stay the way to create responder accounts for now.
+ *
+ * Every write is also checked for its exact set of fields and their types, and timestamps must
+ * be the server's own (the app uses @ServerTimestamp / serverTimestamp()). If a screen in the
+ * app starts saving a new field, add it to the matching list below, or the write is refused.
+ *
+ * Note on cost: working out the caller's role reads users/{uid} once per request. Those reads
+ * count against the free daily quota.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =====================================================================
+    // Helpers
+    // =====================================================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    // 'none' when the person has no users document yet (for example right after sign-up).
+    function roleOf(uid) {
+      return exists(userDoc(uid)) ? get(userDoc(uid)).data.role : 'none';
+    }
+
+    function myRole() {
+      return signedIn() ? roleOf(request.auth.uid) : 'none';
+    }
+
+    function isStaff() {
+      return myRole() in ['responder', 'admin'];
+    }
+
+    function isAdmin() {
+      return myRole() == 'admin';
+    }
+
+    // The keys of the document being written must all be in [allowed].
+    function onlyKeys(allowed) {
+      return request.resource.data.keys().hasOnly(allowed);
+    }
+
+    // An update may change only the keys in [allowed].
+    function changesOnly(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    function isText(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    // These lists mirror the enums in Enums.kt.
+    function validStatus(v) {
+      return v in ['reported', 'verified', 'dispatched', 'on_scene', 'resolved', 'dismissed'];
+    }
+
+    function validVerification(v) {
+      return v in ['pending', 'verified', 'false', 'duplicate'];
+    }
+
+    function validSeverity(v) {
+      return v in ['low', 'medium', 'high', 'critical'];
+    }
+
+    // =====================================================================
+    // users/{uid}
+    // =====================================================================
+
+    match /users/{uid} {
+
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+
+      // A person can only create their OWN document, and only as a citizen. This is what stops
+      // someone signing up and making themselves a responder.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && onlyKeys(['fullName', 'email', 'contactNo', 'address', 'purok',
+                     'emergencyContact', 'role', 'createdAt'])
+        && request.resource.data.role == 'citizen'
+        && isText(request.resource.data.get('fullName', ''), 100)
+        && isText(request.resource.data.get('email', ''), 254)
+        && isText(request.resource.data.get('contactNo', ''), 30)
+        && isText(request.resource.data.get('address', ''), 300)
+        && isText(request.resource.data.get('purok', ''), 100)
+        && isText(request.resource.data.get('emergencyContact', ''), 100)
+        && request.resource.data.get('createdAt', request.time) == request.time;
+
+      // Profile edits: own document, profile fields only. The role cannot change here.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && changesOnly(['fullName', 'contactNo', 'address', 'purok',
+                        'emergencyContact', 'updatedAt'])
+        && isText(request.resource.data.get('fullName', ''), 100)
+        && isText(request.resource.data.get('contactNo', ''), 30)
+        && isText(request.resource.data.get('address', ''), 300)
+        && isText(request.resource.data.get('purok', ''), 100)
+        && isText(request.resource.data.get('emergencyContact', ''), 100);
+
+      // Admins manage accounts and roles (the website, later).
+      allow create, update: if isAdmin();
+    }
+
+    // =====================================================================
+    // incidents/{incidentId}
+    // =====================================================================
+
+    match /incidents/{incidentId} {
+
+      function isReporter() {
+        return signedIn() && resource.data.reporterId == request.auth.uid;
+      }
+
+      // A report that is not on the server yet reads as "missing" (resource == null). That is
+      // allowed on purpose: the citizen's phone starts listening to its own new report while
+      // the write may still be on its way, and refusing that would show a false error.
+      allow get: if signedIn() && (isStaff() || resource == null || isReporter());
+
+      // Queries: a citizen must filter on their own reporterId (the app does). Staff read all.
+      allow list: if signedIn() && (isStaff() || isReporter());
+
+      /*
+       * OPTIONAL, OFF BY DEFAULT: citizen-side duplicate check (D5).
+       * The app asks "which reports were sent in the last 30 minutes, from anyone?" before
+       * sending. Under the rules above that read is refused for a citizen, and the app then
+       * simply sends the report without the duplicate flag (responders still see every report).
+       * To keep the check working, add the rule below. The cost: every signed-in account can
+       * read every report from the last 35 minutes, including reporter name and phone number.
+       *
+       *   allow list: if signedIn()
+       *     && resource.data.submittedAt > request.time - duration.value(35, 'm');
+       */
+
+      function validNewIncident(d) {
+        return d.keys().hasOnly([
+            'reporterId', 'reporterName', 'reporterContact', 'fireType', 'description',
+            'latitude', 'longitude', 'locationSource', 'addressText', 'fireSize',
+            'peopleAtRisk', 'vulnerablePersons', 'trapped', 'hazards', 'hasPhoto',
+            'status', 'verification', 'severity', 'severitySource',
+            'isDuplicate', 'duplicateOf', 'isSuspicious', 'submittedAt', 'updatedAt'])
+          && d.keys().hasAll([
+            'reporterId', 'fireType', 'description', 'latitude', 'longitude',
+            'fireSize', 'status', 'verification', 'severity', 'severitySource',
+            'submittedAt', 'updatedAt'])
+          // A new report always starts the same way. Only responders move it on.
+          && d.status == 'reported'
+          && d.verification == 'pending'
+          && d.severitySource == 'auto'
+          && validSeverity(d.severity)
+          && d.fireType in ['structural', 'electrical', 'rubbish', 'vehicle', 'other']
+          && d.fireSize in ['small', 'medium', 'large']
+          && d.get('locationSource', 'gps') in ['gps', 'pin']
+          && d.description is string && d.description.size() <= 500
+          && d.latitude is number && d.latitude >= -90 && d.latitude <= 90
+          && d.longitude is number && d.longitude >= -180 && d.longitude <= 180
+          && d.get('peopleAtRisk', 0) is int
+          && d.get('peopleAtRisk', 0) >= 0 && d.get('peopleAtRisk', 0) <= 99
+          && d.get('trapped', false) is bool
+          && d.get('hasPhoto', false) is bool
+          && d.get('isDuplicate', false) is bool
+          && d.get('isSuspicious', false) is bool
+          && (d.get('duplicateOf', null) == null || d.get('duplicateOf', null) is string)
+          && d.get('vulnerablePersons', []) is list && d.get('vulnerablePersons', []).size() <= 4
+          && d.get('hazards', []) is list && d.get('hazards', []).size() <= 4
+          && isText(d.get('reporterName', ''), 100)
+          && isText(d.get('reporterContact', ''), 30)
+          && isText(d.get('addressText', ''), 300)
+          // Times are the server's, so a phone with a wrong clock cannot fake them.
+          && d.submittedAt == request.time
+          && d.updatedAt == request.time;
+      }
+
+      allow create: if signedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && validNewIncident(request.resource.data);
+
+      // Responders change status, verification and severity, and nothing else. A citizen has no
+      // update rule at all, so a report cannot be changed after it is sent.
+      allow update: if isStaff()
+        && changesOnly(['status', 'verification', 'severity', 'severitySource', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && validStatus(request.resource.data.status)
+        && validVerification(request.resource.data.verification)
+        && validSeverity(request.resource.data.severity)
+        && request.resource.data.severitySource in ['auto', 'responder'];
+
+      // No deletes from the app.
+
+      // -------------------------------------------------------------------
+      // incidents/{incidentId}/messages/{messageId}: the chat of one report
+      // -------------------------------------------------------------------
+      match /messages/{messageId} {
+
+        function parentIncident() {
+          return /databases/$(database)/documents/incidents/$(incidentId);
+        }
+
+        function isReporterOfParent() {
+          return exists(parentIncident())
+            && get(parentIncident()).data.reporterId == request.auth.uid;
+        }
+
+        allow read: if signedIn() && (isStaff() || isReporterOfParent());
+
+        // Only the reporter and staff can write in a chat. The sender must be the caller, and
+        // the role label must be the caller's REAL role, so a citizen cannot post as a responder.
+        allow create: if signedIn()
+          && (isStaff() || isReporterOfParent())
+          && onlyKeys(['senderId', 'senderName', 'senderRole', 'messageText', 'sentAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderRole == myRole()
+          && isText(request.resource.data.get('senderName', ''), 100)
+          && request.resource.data.messageText is string
+          && request.resource.data.messageText.size() >= 1
+          && request.resource.data.messageText.size() <= 500
+          && request.resource.data.get('sentAt', request.time) == request.time;
+
+        // Messages are never edited or deleted from the app.
+      }
+
+      // -------------------------------------------------------------------
+      // incidents/{incidentId}/assignments/{assignmentId}
+      // -------------------------------------------------------------------
+      match /assignments/{assignmentId} {
+
+        function validAssignment(d) {
+          return d.keys().hasOnly(['responderId', 'responderName', 'unit',
+                                   'assignedResources', 'assignedAt'])
+            && d.responderId == request.auth.uid
+            && isText(d.get('responderName', ''), 100)
+            && d.unit is string && d.unit.size() >= 1 && d.unit.size() <= 50
+            && d.get('assignedResources', []) is list
+            && d.get('assignedResources', []).size() <= 20
+            && d.get('assignedAt', request.time) == request.time;
+        }
+
+        allow read: if isStaff();
+        allow create: if isStaff() && validAssignment(request.resource.data);
+
+        // The app saves an assignment under a fixed id, so "Assign" tapped again after a time-out
+        // writes the same document. Only the responder who made it can overwrite it.
+        allow update: if isStaff()
+          && resource.data.responderId == request.auth.uid
+          && validAssignment(request.resource.data);
+      }
+    }
+
+    // =====================================================================
+    // incident_photos/{incidentId}: the report photo (document id = incident id)
+    // =====================================================================
+
+    match /incident_photos/{photoId} {
+
+      function incidentOf(id) {
+        return /databases/$(database)/documents/incidents/$(id);
+      }
+
+      allow get: if signedIn()
+        && (isStaff()
+            || (exists(incidentOf(photoId))
+                && get(incidentOf(photoId)).data.reporterId == request.auth.uid));
+
+      // Create only: a photo is never replaced. The app writes the photo at the same moment as
+      // the report, so the report may not exist on the server yet. If it does, it must be the
+      // caller's own.
+      allow create: if signedIn()
+        && (!exists(incidentOf(photoId))
+            || get(incidentOf(photoId)).data.reporterId == request.auth.uid)
+        && onlyKeys(['base64', 'mimeType', 'sizeBytes'])
+        && request.resource.data.base64 is string
+        && request.resource.data.base64.size() <= 700000   // the app compresses to about 200 KB
+        && request.resource.data.mimeType in ['image/jpeg', 'image/png', 'image/webp']
+        && request.resource.data.sizeBytes is int
+        && request.resource.data.sizeBytes <= 700000;
+    }
+
+    // =====================================================================
+    // records/{incidentId}: one record per resolved incident
+    // =====================================================================
+
+    match /records/{recordId} {
+
+      function incidentOfRecord() {
+        return /databases/$(database)/documents/incidents/$(recordId);
+      }
+
+      function validRecord(d) {
+        return d.keys().hasOnly(['incidentId', 'resolvedBy', 'remarks', 'dateResolved'])
+          && d.incidentId == recordId
+          && d.resolvedBy == request.auth.uid
+          && isText(d.get('remarks', ''), 500)
+          && d.get('dateResolved', request.time) == request.time
+          // The app writes the record and sets the incident to resolved in ONE batch.
+          // getAfter() looks at the incident as it will be once that batch is applied, so a
+          // record cannot exist for a report that is not being resolved.
+          && getAfter(incidentOfRecord()).data.status == 'resolved';
+      }
+
+      allow read: if isStaff();
+      allow create: if isStaff() && validRecord(request.resource.data);
+
+      // Resolving again overwrites the same record. Only the original resolver, or an admin.
+      allow update: if isStaff()
+        && (resource.data.resolvedBy == request.auth.uid || isAdmin())
+        && validRecord(request.resource.data);
+    }
+
+    // =====================================================================
+    // Everything else
+    // =====================================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

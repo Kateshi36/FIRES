@@ -1,14 +1,10 @@
 package com.example.fires.viewmodel
 
 import android.util.Log
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fires.data.repository.AuthRepository
 import com.example.fires.data.repository.UserRepository
-import com.example.fires.ui.auth.SplashContent
-import com.example.fires.ui.theme.FIRESTheme
 import com.example.fires.util.AuthErrors
 import com.example.fires.util.attempt
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,19 +57,5 @@ class SplashViewModel(
     private companion object {
         const val TAG = "SplashViewModel"
         const val LOAD_TIMEOUT_MS = 10_000L
-    }
-}
-
-@Preview(name = "Splash - loading", showSystemUi = true)
-@Composable
-private fun SplashLoadingPreview() {
-    FIRESTheme { SplashContent(state = SessionState.Loading, onRetry = {}) }
-}
-
-@Preview(name = "Splash - error", showSystemUi = true)
-@Composable
-private fun SplashErrorPreview() {
-    FIRESTheme {
-        SplashContent(state = SessionState.Error(AuthErrors.MSG_LOAD_PROFILE), onRetry = {})
     }
 }
