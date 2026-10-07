@@ -5,7 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 
 /**
- * The notification channels: three for responder alerts (F1.4), two for citizens (F2). Android 8.0+ requires every
+ * The notification channels: three for responder alerts (F1.4), two for live location sharing (H2, H5b), two for citizens (F2). Android 8.0+ requires every
  * notification to belong to a channel, and minSdk is 26, so no version check is needed.
  *
  * Created from FiresApp on every app start. Creating a channel that already exists changes
@@ -17,6 +17,15 @@ object AlertChannels {
 
     /** The permanent "Alerts are on" notification that keeps the service alive. Silent. */
     const val SERVICE = "alerts_service"
+
+    /** The ongoing "Sharing your location" notification while a responder is on a response. Silent. */
+    const val LOCATION_SHARE = "location_share"
+
+    /**
+     * "Sharing stopped" (H5b): posted when location sharing ends because the permission went away.
+     * Loud, unlike the silent ongoing one above, because the citizen can no longer see the responder.
+     */
+    const val LOCATION_STOPPED = "location_stopped"
 
     /** A new fire report. Sound and heads-up, because this is the one that must not be missed. */
     const val NEW_INCIDENT = "alerts_new_incident"
@@ -37,6 +46,20 @@ object AlertChannels {
             SERVICE, "Alerts are on", NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "The ongoing notification shown while F.I.R.E.S. is watching for new fire reports."
+            setShowBadge(false)
+        }
+
+        val locationShare = NotificationChannel(
+            LOCATION_SHARE, "Sharing your location", NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Shown while you share your live location during a response. Tap Stop to end it."
+            setShowBadge(false)
+        }
+
+        val locationStopped = NotificationChannel(
+            LOCATION_STOPPED, "Location sharing stopped", NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Tells you when your live location stopped being shared during a response."
             setShowBadge(false)
         }
 
@@ -70,7 +93,7 @@ object AlertChannels {
         }
 
         manager.createNotificationChannels(
-            listOf(service, newIncident, statusChange, citizenStatus, citizenReply)
+            listOf(service, locationShare, locationStopped, newIncident, statusChange, citizenStatus, citizenReply)
         )
     }
 }

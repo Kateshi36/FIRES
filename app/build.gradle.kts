@@ -67,6 +67,8 @@ dependencies {
 
     // Tests
     testImplementation(libs.junit)
+    // Android's org.json is only a stub in plain JVM tests; this is the real one (OsrmParserTest).
+    testImplementation("org.json:json:20231013")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

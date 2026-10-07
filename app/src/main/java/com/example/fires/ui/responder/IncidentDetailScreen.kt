@@ -3,6 +3,7 @@ package com.example.fires.ui.responder
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -64,9 +65,11 @@ import com.example.fires.ui.auth.ErrorBanner
 import com.example.fires.ui.common.ChipGrid
 import com.example.fires.ui.common.ChipPill
 import com.example.fires.ui.common.FiresMap
+import com.example.fires.ui.common.LocationAccess
 import com.example.fires.ui.common.LatLon
 import com.example.fires.ui.common.MapPoint
 import com.example.fires.ui.common.PrimaryButton
+import com.example.fires.ui.common.rememberLocationAccess
 import com.example.fires.ui.common.SecondaryButton
 import com.example.fires.ui.common.SeverityChip
 import com.example.fires.ui.common.StatusChip
@@ -79,9 +82,18 @@ import com.example.fires.ui.theme.FireRed
 import com.example.fires.ui.theme.Gray600
 import com.example.fires.ui.theme.Green
 import com.example.fires.util.AssignmentRules
+import com.example.fires.util.BatteryOptimization
+import com.example.fires.util.BatteryPromptRules
 import com.example.fires.util.IncidentActionRules
 import com.example.fires.util.ResolveRules
 import com.example.fires.util.IncidentDetailRules
+import com.example.fires.util.LocationGate
+import com.example.fires.util.LocationShareRules
+import com.example.fires.util.MapsIntents
+import com.example.fires.util.RouteRules
+import com.example.fires.data.model.RouteStep
+import com.example.fires.service.LiveRoute
+import com.example.fires.service.LocationShareService
 import com.example.fires.util.dateTimeLabel
 import com.example.fires.viewmodel.IncidentDetailUiState
 import com.example.fires.viewmodel.IncidentDetailViewModel
@@ -110,9 +122,36 @@ fun IncidentDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // H2: permission and GPS state for "Start response". Re-read every time the screen resumes.
+    val location = rememberLocationAccess()
+
+    // H5e: the first "Start response" asks about battery optimization before the service starts.
+    // rememberSaveable: turning the phone must not lose the question. Whatever the answer, the
+    // service starts, so the question can never stop a real response.
+    var showBatteryDialog by rememberSaveable { mutableStateOf(false) }
+    if (showBatteryDialog) {
+        BatteryOptimizationDialog(
+            title = BatteryPromptRules.LOCATION_TITLE,
+            message = BatteryPromptRules.LOCATION_MESSAGE,
+            onAllow = {
+                showBatteryDialog = false
+                // Start FIRST: opening the system dialog sends this app to the background, and
+                // Android 12+ only lets a foreground service start while the app is visible.
+                LocationShareService.start(context, incidentId)
+                if (!BatteryOptimization.requestAllow(context)) {
+                    Toast.makeText(context, "Could not open the battery settings.", Toast.LENGTH_LONG).show()
+                }
+            },
+            onNotNow = {
+                showBatteryDialog = false
+                LocationShareService.start(context, incidentId)
+            }
+        )
+    }
 
     IncidentDetailContent(
         state = state,
+        locationAccess = location,
         onBack = onBack,
         onOpenChat = onOpenChat,
         onOpenIncident = onOpenIncident,
@@ -125,7 +164,25 @@ fun IncidentDetailScreen(
             onStepBack = viewModel::stepBackStatus,
             onAssign = onAssign,
             onResolve = onResolve,
-            onDismissError = viewModel::dismissActionError
+            onDismissError = viewModel::dismissActionError,
+            // H2: the service writes the position; the ViewModel reads its state to flip the button.
+            onStartResponse = {
+                val ask = BatteryPromptRules.shouldAskAtFirstStartResponse(
+                    isIgnoringOptimizations = BatteryOptimization.isIgnoring(context),
+                    alreadyAskedForResponse = BatteryOptimization.wasAskedForResponse(context)
+                )
+                if (ask) {
+                    BatteryOptimization.markAskedForResponse(context) // asked once, even if the app dies now
+                    showBatteryDialog = true
+                } else {
+                    LocationShareService.start(context, incidentId)
+                }
+            },
+            onStopResponse = { LocationShareService.stop(context) },
+            // H3: hands the scene to Google Maps for voice turn-by-turn navigation.
+            onOpenMaps = {
+                state.incident?.let { MapsIntents.openNavigation(context, it.latitude, it.longitude) }
+            }
         ),
         // The dialer only opens with the number filled in. The responder still presses Call, so
         // nobody is dialled by accident and the app needs no CALL_PHONE permission.
@@ -147,7 +204,10 @@ data class IncidentDetailActions(
     val onStepBack: () -> Unit = {},
     val onAssign: () -> Unit = {},
     val onResolve: () -> Unit = {},
-    val onDismissError: () -> Unit = {}
+    val onDismissError: () -> Unit = {},
+    val onStartResponse: () -> Unit = {},
+    val onStopResponse: () -> Unit = {},
+    val onOpenMaps: () -> Unit = {}
 )
 
 /** The look of the detail screen. No ViewModel here, so it can be previewed. */
@@ -160,7 +220,9 @@ fun IncidentDetailContent(
     onRetry: () -> Unit,
     onRetryPhoto: () -> Unit,
     onCall: (String) -> Unit,
-    actions: IncidentDetailActions = IncidentDetailActions()
+    actions: IncidentDetailActions = IncidentDetailActions(),
+    /** Null in previews: the live-response panel then treats location as ready. */
+    locationAccess: LocationAccess? = null
 ) {
     val incident = state.incident
 
@@ -197,7 +259,8 @@ fun IncidentDetailContent(
                         onOpenIncident = onOpenIncident,
                         onRetryPhoto = onRetryPhoto,
                         onCall = onCall,
-                        actions = actions
+                        actions = actions,
+                        locationAccess = locationAccess
                     )
                 }
             }
@@ -218,7 +281,8 @@ private fun IncidentDetails(
     onOpenIncident: (String) -> Unit,
     onRetryPhoto: () -> Unit,
     onCall: (String) -> Unit,
-    actions: IncidentDetailActions
+    actions: IncidentDetailActions,
+    locationAccess: LocationAccess?
 ) {
     Column(
         modifier = Modifier
@@ -257,6 +321,7 @@ private fun IncidentDetails(
 
         // ---- What the responder can do (E3, E4) ----
         ActionsPanel(incident = incident, actionError = state.actionError, actions = actions)
+        LiveResponsePanel(state = state, incident = incident, location = locationAccess, actions = actions)
         AssignedPanel(state.assignments)
 
         // ---- What the reporter said ----
@@ -302,6 +367,12 @@ private fun IncidentDetails(
                 modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)),
                 center = LatLon(incident.latitude, incident.longitude),
                 zoom = 17.0,
+                // H3: while sharing, the blue dot is the responder and the line is the road route.
+                userLocation = state.responderPosition,
+                route = state.liveRoute?.route?.points.orEmpty(),
+                // H5d: a straight-line estimate is dashed, a road route is solid.
+                routeDashed = state.liveRoute?.route?.isEstimate == true,
+                fitRouteKey = if (state.liveRoute != null) incident.id else null,
                 markers = listOf(
                     MapPoint(
                         id = incident.id,
@@ -444,6 +515,178 @@ private fun ActionsPanel(incident: Incident, actionError: String?, actions: Inci
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
         )
+    }
+}
+
+// ---------- Live response (H2) ----------
+
+/**
+ * "Start response" shares this responder's live position until they reach the scene (or tap Stop).
+ * Only drawn for a responder assigned to a DISPATCHED incident. When the phone's location is not
+ * ready the button waits, and a notice with one button fixes it. Anyone else on a DISPATCHED
+ * incident sees a short note saying why there is no button.
+ */
+@Composable
+private fun LiveResponsePanel(
+    state: IncidentDetailUiState,
+    incident: Incident,
+    location: LocationAccess?,
+    actions: IncidentDetailActions
+) {
+    if (!state.canShareLocation && !state.isSharingLocation) {
+        if (incident.statusEnum() == IncidentStatus.DISPATCHED) {
+            Panel(title = "Live response") {
+                Text(
+                    LocationShareRules.NOT_ASSIGNED_NOTE,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        return
+    }
+
+    Panel(title = "Live response") {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (state.isSharingLocation) {
+                Text("Sharing your location", style = MaterialTheme.typography.titleMedium, color = Green)
+                // H5b: the phone's GPS went off mid-response. Offer the one button that fixes it.
+                if (state.gpsLost) {
+                    NoticeRow(
+                        message = LocationShareRules.GPS_OFF_NOTE,
+                        buttonLabel = "Turn on GPS",
+                        onButton = { location?.turnOnGps?.invoke() }
+                    )
+                }
+                RouteBar(state.liveRoute)
+                SecondaryButton(text = "Open in Google Maps", onClick = actions.onOpenMaps)
+                DirectionsList(state.liveRoute?.route?.steps.orEmpty())
+                Text(
+                    LocationShareRules.SHARING_NOTE,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SecondaryButton(text = "Stop sharing", onClick = actions.onStopResponse)
+            } else {
+                Text(
+                    LocationShareRules.SHARING_NOTE,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                val gate = location?.gate ?: LocationGate.Ready
+                if (location != null && gate != LocationGate.Ready) {
+                    LocationNeededNotice(gate, location)
+                }
+                PrimaryButton(
+                    text = "Start response",
+                    onClick = actions.onStartResponse,
+                    enabled = gate == LocationGate.Ready
+                )
+                // Works without sharing: Google Maps finds its own route from where the phone is.
+                SecondaryButton(text = "Open in Google Maps", onClick = actions.onOpenMaps)
+            }
+        }
+    }
+}
+
+/** The bar above the route: "2.4 km, about 6 min", or a short wait message before the first route. */
+@Composable
+private fun RouteBar(live: LiveRoute?) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Text(
+            text = live?.let { RouteRules.routeSummary(it.route) } ?: RouteRules.FINDING_ROUTE,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(12.dp)
+        )
+    }
+}
+
+/** The turn-by-turn steps from the routing service, folded away until asked for. */
+@Composable
+private fun DirectionsList(steps: List<RouteStep>) {
+    if (steps.isEmpty()) return
+    var show by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { show = !show }) {
+        Text(if (show) "Hide directions" else "Show directions (${steps.size} steps)")
+    }
+    if (show) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            steps.forEachIndexed { index, step ->
+                Row {
+                    Text(
+                        "${index + 1}.",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(28.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(step.instruction, style = MaterialTheme.typography.bodyLarge)
+                        if (step.distanceMeters > 0) {
+                            Text(
+                                RouteRules.distanceLabel(step.distanceMeters),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Why "Start response" is waiting, with the one button that fixes it. */
+@Composable
+private fun LocationNeededNotice(gate: LocationGate, location: LocationAccess) {
+    val message: String
+    val buttonLabel: String
+    val onButton: () -> Unit
+    when (gate) {
+        LocationGate.Ready -> return
+        LocationGate.AskPermission -> {
+            message = "Allow location so staff and the reporter can see where you are."
+            buttonLabel = "Allow"
+            onButton = location.requestPermission
+        }
+        is LocationGate.PermissionDenied -> {
+            message = "Location is off for this app, so your position can't be shared."
+            buttonLabel = if (gate.canAskAgain) "Allow" else "Settings"
+            onButton = if (gate.canAskAgain) location.requestPermission else location.openAppSettings
+        }
+        LocationGate.GpsOff -> {
+            message = "Your phone's GPS is off. Turn it on to share your position."
+            buttonLabel = "Turn on"
+            onButton = location.turnOnGps
+        }
+    }
+    NoticeRow(message = message, buttonLabel = buttonLabel, onButton = onButton)
+}
+
+/** A short message with one button on its right. Used for both "Start is waiting" and "GPS went off". */
+@Composable
+private fun NoticeRow(message: String, buttonLabel: String, onButton: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onButton) { Text(buttonLabel) }
+        }
     }
 }
 
@@ -699,6 +942,87 @@ private fun DetailVerifiedPreview() = PreviewScreen(
         incident = sample(status = IncidentStatus.VERIFIED).copy(verification = Verification.VERIFIED.value),
         photo = com.example.fires.viewmodel.PhotoState.Unavailable,
         actionError = IncidentActionRules.ACTION_ERROR,
+        isLoading = false
+    )
+)
+
+@Preview(name = "Detail - dispatched, can start response", showSystemUi = true)
+@Composable
+private fun DetailCanStartPreview() = PreviewScreen(
+    IncidentDetailUiState(
+        incident = sample(status = IncidentStatus.DISPATCHED),
+        photo = com.example.fires.viewmodel.PhotoState.Unavailable,
+        canShareLocation = true,
+        isLoading = false
+    )
+)
+
+@Preview(name = "Detail - sharing location", showSystemUi = true)
+@Composable
+private fun DetailSharingPreview() = PreviewScreen(
+    IncidentDetailUiState(
+        incident = sample(status = IncidentStatus.DISPATCHED),
+        photo = com.example.fires.viewmodel.PhotoState.Unavailable,
+        canShareLocation = true,
+        isSharingLocation = true,
+        isLoading = false
+    )
+)
+
+@Preview(name = "Detail - sharing, GPS turned off", showSystemUi = true)
+@Composable
+private fun DetailGpsOffPreview() = PreviewScreen(
+    IncidentDetailUiState(
+        incident = sample(status = IncidentStatus.DISPATCHED),
+        photo = com.example.fires.viewmodel.PhotoState.Unavailable,
+        canShareLocation = true,
+        isSharingLocation = true,
+        gpsLost = true,
+        isLoading = false
+    )
+)
+
+@Preview(name = "Detail - sharing, with route", showSystemUi = true)
+@Composable
+private fun DetailRoutePreview() = PreviewScreen(
+    IncidentDetailUiState(
+        incident = sample(status = IncidentStatus.DISPATCHED),
+        photo = com.example.fires.viewmodel.PhotoState.Unavailable,
+        canShareLocation = true,
+        isSharingLocation = true,
+        liveRoute = LiveRoute(
+            incidentId = "demo",
+            route = com.example.fires.data.model.Route(
+                points = listOf(LatLon(14.59, 120.98), LatLon(14.5995, 120.9842)),
+                distanceMeters = 2_400,
+                durationSeconds = 360,
+                steps = listOf(
+                    RouteStep("Head out on Rizal St.", 1_200),
+                    RouteStep("Turn left onto Mabini St.", 1_200),
+                    RouteStep("Arrive at the scene", 0)
+                )
+            ),
+            computedAtMillis = 0L
+        ),
+        isLoading = false
+    )
+)
+
+@Preview(name = "Detail - sharing, straight line (no route)", showSystemUi = true)
+@Composable
+private fun DetailStraightLinePreview() = PreviewScreen(
+    IncidentDetailUiState(
+        incident = sample(status = IncidentStatus.DISPATCHED),
+        photo = com.example.fires.viewmodel.PhotoState.Unavailable,
+        canShareLocation = true,
+        isSharingLocation = true,
+        liveRoute = LiveRoute(
+            incidentId = "demo",
+            route = com.example.fires.util.RouteRules.straightLine(
+                LatLon(14.5895, 120.9842), LatLon(14.5995, 120.9842)
+            ),
+            computedAtMillis = 0L
+        ),
         isLoading = false
     )
 )

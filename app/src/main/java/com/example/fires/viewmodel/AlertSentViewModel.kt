@@ -1,4 +1,4 @@
-package com.example.fires.viewmodel
+ package com.example.fires.viewmodel
 
 import android.util.Log
 import androidx.lifecycle.ViewModel

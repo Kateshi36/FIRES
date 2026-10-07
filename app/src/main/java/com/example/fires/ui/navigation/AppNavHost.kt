@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.fires.data.repository.AuthRepository
 import com.example.fires.service.CitizenAlertWatcher
+import com.example.fires.service.LocationShareService
 import com.example.fires.service.ResponderAlertService
 import com.example.fires.ui.auth.LoginScreen
 import com.example.fires.ui.auth.PermissionScreen
@@ -76,6 +77,8 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
         // sign-out (and it does not sit there failing once the session is gone). Stopping a
         // service that is not running, for example for a citizen, does nothing.
         ResponderAlertService.stop(context)
+        // H2: and stop sharing the live location, so a signed-out phone is never tracked.
+        LocationShareService.stop(context)
         // F2: the same for a citizen's local notifications.
         CitizenAlertWatcher.stop()
         CitizenViewing.clear()

@@ -8,11 +8,17 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.fires.data.model.Assignment
 import com.example.fires.data.model.Incident
+import com.example.fires.data.model.IncidentStatus
 import com.example.fires.data.model.Severity
 import com.example.fires.data.model.Verification
 import com.example.fires.data.model.severityEnum
 import com.example.fires.data.model.statusEnum
 import com.example.fires.data.repository.AssignmentRepository
+import com.example.fires.data.repository.AuthRepository
+import com.example.fires.service.LiveRoute
+import com.example.fires.service.LocationShareState
+import com.example.fires.ui.common.LatLon
+import com.example.fires.util.LocationShareRules
 import com.example.fires.data.repository.IncidentRepository
 import com.example.fires.util.IncidentActionRules
 import com.example.fires.util.IncidentDetailRules
@@ -61,6 +67,15 @@ data class IncidentDetailUiState(
     val assignments: List<Assignment> = emptyList(),
     /** Set when a verify, severity or status change was refused or could not be saved. */
     val actionError: String? = null,
+    /** H2: this responder is assigned and the incident is DISPATCHED, so "Start response" is offered. */
+    val canShareLocation: Boolean = false,
+    /** H2: this phone is sharing its location for THIS incident right now. */
+    val isSharingLocation: Boolean = false,
+    /** H3: the responder's own position and the road route to the incident, while sharing. */
+    val responderPosition: LatLon? = null,
+    val liveRoute: LiveRoute? = null,
+    /** H5b: this phone is sharing for THIS incident but its GPS has been switched off. */
+    val gpsLost: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null
 )
@@ -79,7 +94,8 @@ data class IncidentDetailUiState(
 class IncidentDetailViewModel(
     private val incidentId: String,
     private val incidents: IncidentRepository = IncidentRepository(),
-    private val assignmentRepo: AssignmentRepository = AssignmentRepository()
+    private val assignmentRepo: AssignmentRepository = AssignmentRepository(),
+    private val auth: AuthRepository = AuthRepository()
 ) : ViewModel() {
 
     private sealed interface Feed {
@@ -87,6 +103,9 @@ class IncidentDetailViewModel(
         data object Failed : Feed
         data class Loaded(val incident: Incident?) : Feed
     }
+
+    /** What the location service reports (H2, H3), gathered into one value so combine() stays short. */
+    private data class ShareInfo(val sharingId: String?, val position: LatLon?, val route: LiveRoute?, val gpsLost: Boolean)
 
     private data class Extras(
         val duplicates: List<Incident>,
@@ -158,8 +177,15 @@ class IncidentDetailViewModel(
         Extras(merged, parent, picture, assigned)
     }
 
+    private val share: Flow<ShareInfo> = combine(
+        LocationShareState.activeIncidentId,
+        LocationShareState.position,
+        LocationShareState.route,
+        LocationShareState.gpsLost
+    ) { sharingId, position, route, gpsLost -> ShareInfo(sharingId, position, route, gpsLost) }
+
     val state: StateFlow<IncidentDetailUiState> =
-        combine(feed, extras, actionError) { result, extra, error ->
+        combine(feed, extras, actionError, share) { result, extra, error, sharing ->
             when (result) {
                 Feed.Loading -> IncidentDetailUiState()
                 Feed.Failed -> IncidentDetailUiState(isLoading = false, error = LOAD_ERROR)
@@ -170,6 +196,15 @@ class IncidentDetailViewModel(
                     photo = extra.photo,
                     assignments = extra.assignments,
                     actionError = error,
+                    canShareLocation = LocationShareRules.canStart(
+                        result.incident?.statusEnum() ?: IncidentStatus.REPORTED,
+                        extra.assignments,
+                        auth.currentUid
+                    ),
+                    isSharingLocation = sharing.sharingId == incidentId,
+                    responderPosition = sharing.position.takeIf { sharing.sharingId == incidentId },
+                    liveRoute = sharing.route?.takeIf { sharing.sharingId == incidentId && it.incidentId == incidentId },
+                    gpsLost = sharing.gpsLost && sharing.sharingId == incidentId,
                     isLoading = false
                 )
             }

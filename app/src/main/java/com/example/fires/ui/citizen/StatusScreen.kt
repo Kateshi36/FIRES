@@ -1,5 +1,6 @@
 package com.example.fires.ui.citizen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,7 +28,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -38,19 +43,28 @@ import com.example.fires.data.model.DeliveryState
 import com.example.fires.data.model.FireType
 import com.example.fires.data.model.Incident
 import com.example.fires.data.model.IncidentStatus
+import com.example.fires.data.model.ResponderLocation
 import com.example.fires.data.model.Severity
 import com.example.fires.data.model.fireTypeEnum
 import com.example.fires.data.model.severityEnum
 import com.example.fires.data.model.statusEnum
 import com.example.fires.ui.auth.ErrorBanner
+import com.example.fires.ui.common.FiresMap
+import com.example.fires.ui.common.LatLon
+import com.example.fires.ui.common.MapPoint
 import com.example.fires.ui.common.PrimaryButton
+import com.example.fires.ui.common.rememberSmoothPositions
+import com.example.fires.ui.common.severityColor
 import com.example.fires.ui.common.SecondaryButton
 import com.example.fires.ui.common.SeverityChip
 import com.example.fires.ui.common.StatusChip
 import com.example.fires.ui.common.StatusStepper
 import com.example.fires.ui.theme.Amber
 import com.example.fires.ui.theme.FIRESTheme
+import com.example.fires.ui.theme.Gray600
+import com.example.fires.ui.theme.Green
 import com.example.fires.util.ChatRules
+import com.example.fires.util.ResponderTrackingRules
 import com.example.fires.util.dateTimeLabel
 import com.example.fires.util.statusDetail
 import com.example.fires.util.statusHeadline
@@ -117,7 +131,12 @@ fun StatusContent(
                         )
                     }
 
-                    else -> ReportDetails(incident = incident, delivery = state.delivery)
+                    else -> ReportDetails(
+                        incident = incident,
+                        delivery = state.delivery,
+                        responders = state.responders,
+                        nowMillis = state.nowMillis
+                    )
                 }
             }
 
@@ -131,8 +150,14 @@ fun StatusContent(
 }
 
 @Composable
-private fun ReportDetails(incident: Incident, delivery: DeliveryState) {
+private fun ReportDetails(
+    incident: Incident,
+    delivery: DeliveryState,
+    responders: List<ResponderLocation>,
+    nowMillis: Long
+) {
     val status = incident.statusEnum()
+    val banner = ResponderTrackingRules.banner(status, responders, nowMillis)
 
     Column(
         modifier = Modifier
@@ -175,10 +200,21 @@ private fun ReportDetails(incident: Incident, delivery: DeliveryState) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        // H4: where the responder is, and when they will arrive.
+        if (banner != null) {
+            Spacer(Modifier.height(12.dp))
+            TrackingBanner(banner)
+        }
+
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SeverityChip(incident.severityEnum())
             StatusChip(status)
+        }
+
+        if (status == IncidentStatus.DISPATCHED && responders.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            TrackingMap(incident = incident, responders = responders, nowMillis = nowMillis)
         }
 
         Spacer(Modifier.height(24.dp))
@@ -202,6 +238,107 @@ private fun ReportDetails(incident: Incident, delivery: DeliveryState) {
         }
     }
 }
+
+// ---------- Responder tracking (H4) ----------
+
+/** "Responder is on the way, arriving in about 6 min". A live region, so TalkBack reads each change out. */
+@Composable
+private fun TrackingBanner(banner: ResponderTrackingRules.Banner) {
+    val tint = when (banner.kind) {
+        ResponderTrackingRules.Kind.LIVE -> Green
+        ResponderTrackingRules.Kind.ARRIVED -> Green
+        ResponderTrackingRules.Kind.STALE -> Amber
+        ResponderTrackingRules.Kind.WAITING -> Gray600
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+        shape = RoundedCornerShape(12.dp),
+        color = tint.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, tint)
+    ) {
+        Text(
+            text = banner.text,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(14.dp)
+        )
+    }
+}
+
+/**
+ * The fire and the responders on one map. Each responder's dot glides to each new position
+ * instead of jumping, and turns grey when its location is more than a minute old. The map zooms
+ * out once to fit everyone, then leaves the camera to the citizen.
+ *
+ * Under the map, a legend names each dot ("Responder 1", "Responder 2 (last seen 2 min ago)")
+ * in the same colour, because tapping a marker does not open a label.
+ */
+@Composable
+private fun TrackingMap(incident: Incident, responders: List<ResponderLocation>, nowMillis: Long) {
+    val targets = responders.associate { it.id to LatLon(it.latitude, it.longitude) }
+    val glided = rememberSmoothPositions(targets)
+    val scene = LatLon(incident.latitude, incident.longitude)
+    val labels = ResponderTrackingRules.markerLabels(responders, nowMillis)
+    val labelById = labels.associateBy { it.responderId }
+
+    FiresMap(
+        modifier = Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(12.dp)),
+        center = scene,
+        zoom = 16.0,
+        markers = listOf(
+            MapPoint(
+                id = incident.id,
+                latitude = scene.latitude,
+                longitude = scene.longitude,
+                title = "Fire location",
+                color = severityColor(incident.severityEnum())
+            )
+        ) + responders.mapNotNull { responder ->
+            glided[responder.id]?.let { at ->
+                val label = labelById[responder.id]
+                MapPoint(
+                    id = "responder-" + responder.id,
+                    latitude = at.latitude,
+                    longitude = at.longitude,
+                    title = label?.text ?: "Responder",
+                    color = markerColor(label)
+                )
+            }
+        },
+        fitRouteKey = incident.id,
+        fitPoints = listOf(scene) + targets.values
+    )
+    Spacer(Modifier.height(8.dp))
+    labels.forEach { label ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(vertical = 2.dp)
+        ) {
+            Box(Modifier.size(10.dp).background(markerColor(label), CircleShape))
+            Spacer(Modifier.width(8.dp))
+            Text(label.text, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    Text(
+        "The dots move as the responders get closer. A grey dot means its location is out of date.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+}
+
+/**
+ * One colour per responder, so a dot and its legend row match. Never red, amber or green: those
+ * are the fire marker's severity colours.
+ */
+private val ResponderColors = listOf(
+    Color(0xFF1A73E8), // blue
+    Color(0xFF8E24AA), // purple
+    Color(0xFF00838F), // cyan
+    Color(0xFF6D4C41)  // brown
+)
+
+private fun markerColor(label: ResponderTrackingRules.MarkerLabel?): Color =
+    if (label == null || !label.fresh) Gray600 else ResponderColors[label.position % ResponderColors.size]
 
 @Composable
 private fun DetailRow(label: String, value: String) {
@@ -235,6 +372,36 @@ private fun PreviewScreen(state: StatusUiState) {
 @Composable
 private fun StatusReportedPreview() =
     PreviewScreen(StatusUiState(sample(IncidentStatus.REPORTED), DeliveryState.SENT, isLoading = false))
+
+private fun tracked(agoSeconds: Long = 5, eta: Int? = 360) = ResponderLocation(
+    id = "r1", latitude = 14.5990, longitude = 120.9830,
+    etaSeconds = eta, distanceMeters = 2_400,
+    updatedAt = com.google.firebase.Timestamp(System.currentTimeMillis() / 1000 - agoSeconds, 0)
+)
+
+@Preview(name = "Status - dispatched, responder live", showSystemUi = true)
+@Composable
+private fun StatusLivePreview() = PreviewScreen(
+    StatusUiState(
+        sample(IncidentStatus.DISPATCHED), DeliveryState.SENT, isLoading = false,
+        responders = listOf(tracked()), nowMillis = System.currentTimeMillis()
+    )
+)
+
+@Preview(name = "Status - dispatched, location stale", showSystemUi = true)
+@Composable
+private fun StatusStalePreview() = PreviewScreen(
+    StatusUiState(
+        sample(IncidentStatus.DISPATCHED), DeliveryState.SENT, isLoading = false,
+        responders = listOf(tracked(agoSeconds = 125)), nowMillis = System.currentTimeMillis()
+    )
+)
+
+@Preview(name = "Status - dispatched, waiting for location", showSystemUi = true)
+@Composable
+private fun StatusWaitingPreview() = PreviewScreen(
+    StatusUiState(sample(IncidentStatus.DISPATCHED), DeliveryState.SENT, isLoading = false)
+)
 
 @Preview(name = "Status - on scene", showSystemUi = true)
 @Composable

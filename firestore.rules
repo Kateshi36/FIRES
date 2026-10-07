@@ -7,7 +7,8 @@ rules_version = '2';
  *   - A citizen creates their own reports and reads only their own reports and chats.
  *     They can never change a report afterwards (status, severity, flags, anything).
  *   - A responder (and an admin, who uses the same screens) reads every report, changes only
- *     status, verification and severity, and writes assignments, records and chat messages.
+ *     status, verification and severity, and writes assignments, records, chat messages and
+ *     their own live location.
  *   - Only an admin can change a role. In the app nobody can: a citizen can edit their own
  *     profile fields and nothing else. Responder accounts are made in the Console (or by an
  *     admin on the website later).
@@ -262,6 +263,60 @@ service cloud.firestore {
         allow update: if isStaff()
           && resource.data.responderId == request.auth.uid
           && validAssignment(request.resource.data);
+      }
+
+      // -------------------------------------------------------------------
+      // incidents/{incidentId}/responderLocations/{responderId}: live position of a responder
+      // -------------------------------------------------------------------
+      // The document id is the responder's uid and the document is overwritten on every update.
+      // A responder can only write their OWN document. Staff and the person who reported the
+      // incident can read it (the citizen's tracker listens to this collection). Nobody else can.
+      match /responderLocations/{responderId} {
+
+        function locationIncident() {
+          return /databases/$(database)/documents/incidents/$(incidentId);
+        }
+
+        function isIncidentReporter() {
+          return exists(locationIncident())
+            && get(locationIncident()).data.reporterId == request.auth.uid;
+        }
+
+        // Absent or null is fine. Otherwise it must be a number inside [lo, hi].
+        function optionalNumber(d, key, lo, hi) {
+          return d.get(key, null) == null
+            || (d.get(key, null) is number
+                && d.get(key, null) >= lo && d.get(key, null) <= hi);
+        }
+
+        function optionalWholeNumber(d, key, hi) {
+          return d.get(key, null) == null
+            || (d.get(key, null) is int
+                && d.get(key, null) >= 0 && d.get(key, null) <= hi);
+        }
+
+        function validLocation(d) {
+          return d.keys().hasOnly(['latitude', 'longitude', 'heading', 'speed',
+                                   'etaSeconds', 'distanceMeters', 'updatedAt'])
+            && d.keys().hasAll(['latitude', 'longitude', 'updatedAt'])
+            && d.latitude is number && d.latitude >= -90 && d.latitude <= 90
+            && d.longitude is number && d.longitude >= -180 && d.longitude <= 180
+            && optionalNumber(d, 'heading', 0, 360)
+            && optionalNumber(d, 'speed', 0, 200)               // m/s, far above any fire truck
+            && optionalWholeNumber(d, 'etaSeconds', 86400)      // up to 24 hours
+            && optionalWholeNumber(d, 'distanceMeters', 1000000) // up to 1,000 km
+            // The time is the server's, so a phone with a wrong clock cannot fake "just now".
+            && d.updatedAt == request.time;
+        }
+
+        allow read: if signedIn() && (isStaff() || isIncidentReporter());
+
+        allow create, update: if isStaff()
+          && responderId == request.auth.uid
+          && validLocation(request.resource.data);
+
+        // Stopping a response removes the marker from the citizen's map.
+        allow delete: if isStaff() && responderId == request.auth.uid;
       }
     }
 

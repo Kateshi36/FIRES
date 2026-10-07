@@ -37,6 +37,11 @@ object LocationChecks {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 
+    /** True only for PRECISE location. Live tracking asks for it first and falls back to approximate. */
+    fun hasFineLocationPermission(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
     /** Is the phone's location switch on? (Quick Settings > Location.) */
     fun isLocationEnabled(context: Context): Boolean {
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager

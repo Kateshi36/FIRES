@@ -14,6 +14,7 @@ object FireCollections {
     const val PHOTOS = "incident_photos"
     const val MESSAGES = "messages"        // subcollection of incidents
     const val ASSIGNMENTS = "assignments"  // subcollection of incidents
+    const val RESPONDER_LOCATIONS = "responderLocations" // subcollection of incidents
     const val RECORDS = "records"
 }
 

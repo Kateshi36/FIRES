@@ -18,6 +18,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!--
+      Live location sharing (Phase H2). Android 14+ requires this permission for a foreground
+      service of type "location". It also needs ACCESS_FINE_LOCATION (above) to be granted when
+      the service starts, which the "Start response" button makes sure of.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!--
       Battery optimization (F1.13). Lets the responder allow F.I.R.E.S. to ignore battery
       optimization, so Android does not put the alert service to sleep. Only used to show the
       system's own "Allow" dialog. Note: Google Play restricts this permission to apps whose core
@@ -73,6 +80,16 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a live listener on new fire reports so responders are alerted while the app is closed" />
         </service>
+
+        <!--
+          Live location sharing while a responder is on a response (H2). Not exported. Started only
+          by the "Start response" button, and stops itself when the incident leaves DISPATCHED.
+          Type "location" (not specialUse): this is exactly what the type is for.
+        -->
+        <service
+            android:name=".service.LocationShareService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
     </application>
 
 </manifest>

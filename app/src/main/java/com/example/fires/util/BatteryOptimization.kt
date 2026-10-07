@@ -19,6 +19,7 @@ object BatteryOptimization {
     private const val TAG = "BatteryOptimization"
     private const val PREFS = "fires_prefs"
     private const val KEY_ASKED = "battery_prompt_asked"
+    private const val KEY_ASKED_RESPONSE = "battery_prompt_asked_response" // H5e: its own flag
 
     /** True when Android already lets this app run in the background without restrictions. */
     fun isIgnoring(context: Context): Boolean {
@@ -32,6 +33,14 @@ object BatteryOptimization {
 
     fun markAsked(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ASKED, true).apply()
+    }
+
+    /** Has the "Start response" question been shown on this phone already? Separate from [wasAsked]. */
+    fun wasAskedForResponse(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ASKED_RESPONSE, false)
+
+    fun markAskedForResponse(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_ASKED_RESPONSE, true).apply()
     }
 
     /**

@@ -92,6 +92,23 @@ data class Assignment(
     @ServerTimestamp var assignedAt: Timestamp? = null
 )
 
+/**
+ * incidents/{incidentId}/responderLocations/{responderId}: where one responder is right now.
+ * The document id is the responder's uid. It is overwritten on every update, and deleted when
+ * the responder stops sharing. Heading, speed, ETA and distance are null until known
+ * (for example the ETA before the first route has been fetched).
+ */
+data class ResponderLocation(
+    @DocumentId var id: String = "",          // = responderId
+    var latitude: Double = 0.0,
+    var longitude: Double = 0.0,
+    var heading: Double? = null,              // degrees, 0 to 360
+    var speed: Double? = null,                // metres per second
+    var etaSeconds: Int? = null,              // estimated time to the scene
+    var distanceMeters: Int? = null,          // road distance to the scene
+    @ServerTimestamp var updatedAt: Timestamp? = null
+)
+
 /** records/{incidentId}: one record per resolved incident (ERD: incident 1 to 0..1 record). */
 data class IncidentRecord(
     @DocumentId var id: String = "",
