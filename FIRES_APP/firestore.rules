@@ -8,7 +8,8 @@ rules_version = '2';
  *     They can never change a report afterwards (status, severity, flags, anything).
  *   - A responder (and an admin, who uses the same screens) reads every report, changes only
  *     status, verification and severity, and writes assignments, records, chat messages and
- *     their own live location.
+ *     their own live location. A responder assigns only themselves; an admin can also assign
+ *     any responder account (from the website).
  *   - Only an admin can change a role. In the app nobody can: a citizen can edit their own
  *     profile fields and nothing else. Responder accounts are made in the Console (or by an
  *     admin on the website later).
@@ -244,10 +245,12 @@ service cloud.firestore {
       // -------------------------------------------------------------------
       match /assignments/{assignmentId} {
 
-        function validAssignment(d) {
+        // The shape of an assignment document: exact fields, sizes and a server time. Who the
+        // assignment is FOR (responderId) is checked separately, because it differs by caller.
+        function validAssignmentFields(d) {
           return d.keys().hasOnly(['responderId', 'responderName', 'unit',
                                    'assignedResources', 'assignedAt'])
-            && d.responderId == request.auth.uid
+            && d.responderId is string
             && isText(d.get('responderName', ''), 100)
             && d.unit is string && d.unit.size() >= 1 && d.unit.size() <= 50
             && d.get('assignedResources', []) is list
@@ -255,14 +258,32 @@ service cloud.firestore {
             && d.get('assignedAt', request.time) == request.time;
         }
 
+        // An assignment made by a responder is always for themselves.
+        function validOwnAssignment(d) {
+          return validAssignmentFields(d) && d.responderId == request.auth.uid;
+        }
+
         allow read: if isStaff();
-        allow create: if isStaff() && validAssignment(request.resource.data);
+
+        // A responder (or an admin using the app) assigns only THEMSELVES. An admin, from the
+        // website, can also assign any account whose users document has role = responder: a
+        // citizen, another admin or a uid with no users document is refused. Either way the
+        // fields and the server time are checked, so an assignment cannot carry anything else.
+        allow create: if isStaff()
+          && validAssignmentFields(request.resource.data)
+          && (request.resource.data.responderId == request.auth.uid
+              || (isAdmin() && roleOf(request.resource.data.responderId) == 'responder'));
 
         // The app saves an assignment under a fixed id, so "Assign" tapped again after a time-out
-        // writes the same document. Only the responder who made it can overwrite it.
+        // writes the same document. Only the responder who made it can overwrite it, and it must
+        // stay their own. (The website does not overwrite: it checks whether the assignment
+        // already exists before retrying, so admins need no update right.)
         allow update: if isStaff()
           && resource.data.responderId == request.auth.uid
-          && validAssignment(request.resource.data);
+          && validOwnAssignment(request.resource.data);
+
+        // No deletes yet. If the team needs to remove a wrong assignment from the website, add:
+        //   allow delete: if isAdmin();
       }
 
       // -------------------------------------------------------------------

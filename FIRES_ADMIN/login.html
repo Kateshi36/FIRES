@@ -3,14 +3,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/login.css">
-<script>if(sessionStorage.getItem("fires_admin")==="1")location.replace("index.html");</script></head>
+</head>
 <body><div class="split">
 <section class="brand"><div class="mark">F.I.R.E.S.</div><h2>Fire Incident &amp; Response<br>Emergency System</h2><p>Manage responder accounts, monitor incidents on the map and review records for Barangay Bagumbayan.</p><div class="blob"></div></section>
 <section class="panel"><form id="f" novalidate>
 <h1>Administrator sign in</h1><p class="lead">Only administrator accounts can open this panel.</p>
 <div id="err" class="err" role="alert" hidden></div>
-<label>Email<input id="em" type="email" autocomplete="username" placeholder="admin@fires.ph"></label>
+<label>Email<input id="em" type="email" autocomplete="username" placeholder="Enter your email"></label>
 <label>Password<span class="pw"><input id="pw" type="password" autocomplete="current-password" placeholder="Enter your password"><button type="button" id="eye" aria-label="Show password">Show</button></span></label>
 <button class="go" id="go" type="submit">Sign in</button>
-<p class="demo">Demo account: <b>admin@fires.ph</b> / <b>admin123</b></p>
-</form></section></div><script src="js/login.js"></script></body></html>
+</form></section></div><script type="module" src="js/login.js"></script></body></html>

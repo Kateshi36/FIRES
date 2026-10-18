@@ -2,8 +2,8 @@ F.I.R.E.S. Admin Panel (HTML, CSS, JavaScript)
 
 HOW TO RUN
 Open login.html in a browser. No install needed.
-Demo admin login: admin@fires.ph / admin123
-(responder login r.delacruz@bflare.ph / responder1 is rejected, to show admin-only access)
+Sign in with an administrator account (users/{uid} in Firestore with role = admin).
+Accounts with any other role are signed out and refused.
 
 FILES
 login.html      Admin-only sign-in page (css/login.css, js/login.js)
