@@ -1,0 +1,17 @@
+{
+  "name": "fires-rules-test",
+  "private": true,
+  "type": "module",
+  "description": "Automated checks of firestore.rules (W14). Runs on the Firestore emulator, never on the live project.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-fires --config ../firebase.json \"node --test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^14.27.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

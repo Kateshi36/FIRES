@@ -1,0 +1,23 @@
+# Secrets and local files: never commit these
+google-services.json
+GoogleService-Info.plist
+local.properties
+serviceAccount*.json
+*-service-account*.json
+*-firebase-adminsdk-*.json
+*.pem
+*.key
+.env
+.env.*
+
+# Tools and system files
+node_modules/
+.vercel/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
