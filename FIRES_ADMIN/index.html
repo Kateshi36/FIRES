@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>F.I.R.E.S. Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script>if(sessionStorage.getItem("fires_admin")!=="1")location.replace("login.html");</script></head>
+<body><div class="app">
+<aside><div class="logo">F.I.R.E.S.</div><div class="sub">Admin panel, Brgy. Bagumbayan</div>
+<button data-t="over" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</button><button data-t="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Live map</button><button data-t="resp"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5 6.5-5s5.7 1.5 6.5 5"/><path d="M16 4.5a3.5 3.5 0 010 7M18 15c2 .6 3.2 2.2 3.5 5"/></svg>User accounts</button><button data-t="rec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>Incident records</button><button data-t="rep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reports</button>
+<div class="me"><b>Administrator</b><br>admin@fires.ph</div></aside>
+<div class="content"><header class="top"><span id="today"></span><div class="who"><span class="av" id="av">A</span><span id="nm">Administrator</span><button class="btn ghost" id="out">Log out</button></div></header><main id="main"></main></div></div>
+<div class="scrim" id="scrim"></div><div class="drawer" id="drawer" aria-live="polite"></div><div id="lb" role="dialog" aria-label="Photo preview"></div><div class="toast" id="toast"></div>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script></body></html>

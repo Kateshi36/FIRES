@@ -1,0 +1,19 @@
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+:root{--red:#e53935;--red2:#c62828;--bg:#fff;--ink:#1a1d23;--mute:#6b7280;--line:#e1e4e9;--tint:#fff0ef}
+@media(prefers-color-scheme:dark){:root{--bg:#14161b;--ink:#f1f2f4;--mute:#9aa1ad;--line:#2a2e36;--tint:#3a1d1c}}
+body{font:15px/1.5 'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+.split{display:grid;grid-template-columns:1.05fr 1fr;min-height:100vh}
+.brand{position:relative;overflow:hidden;background:linear-gradient(145deg,#ff6f60,#e53935 45%,#b71c1c);color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:center}
+.mark{font-weight:800;font-size:34px;letter-spacing:1px;margin-bottom:28px}.brand h2{font-size:30px;line-height:1.2;margin:0 0 14px;letter-spacing:-.02em}.brand p{max-width:380px;opacity:.9;margin:0}
+.blob{position:absolute;right:-120px;bottom:-120px;width:380px;height:380px;border-radius:50%;background:rgba(255,255,255,.12)}.blob::after{content:"";position:absolute;inset:60px;border-radius:50%;background:rgba(255,255,255,.12)}
+.panel{display:grid;place-items:center;padding:32px}form{width:100%;max-width:380px;display:grid;gap:16px}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}.lead{margin:0;color:var(--mute)}
+label{display:grid;gap:6px;font-weight:600;font-size:13px}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;width:100%}
+input:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px var(--tint)}
+.pw{position:relative;display:block}.pw input{padding-right:64px}.pw button{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--red2);font:inherit;font-weight:600;font-size:13px;cursor:pointer;padding:8px}
+.go{font:inherit;font-weight:700;color:#fff;background:var(--red);border:0;border-radius:10px;padding:13px;cursor:pointer;box-shadow:0 6px 16px rgba(229,57,53,.3)}.go:hover{background:var(--red2)}.go:disabled{opacity:.7;cursor:wait}
+.go:focus-visible,.pw button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.err{background:var(--tint);color:var(--red2);border:1px solid var(--red);border-radius:10px;padding:10px 12px;font-weight:500}
+.demo{margin:0;text-align:center;font-size:12px;color:var(--mute)}
+@media(max-width:820px){.split{grid-template-columns:1fr}.brand{padding:32px;min-height:220px}.brand p,.blob{display:none}.brand h2{font-size:22px}}
