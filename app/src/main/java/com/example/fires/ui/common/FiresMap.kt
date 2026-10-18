@@ -21,6 +21,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlin.math.abs
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.views.overlay.Polyline
@@ -151,7 +152,9 @@ fun FiresMap(
             val box = BoundingBox.fromGeoPoints(points.map { GeoPoint(it.latitude, it.longitude) })
             // Two points almost on top of each other (the responder has arrived) would zoom to the
             // closest level; leave the map where it is instead.
-            val tiny = box.latitudeSpan < 0.0002 && box.longitudeSpan < 0.0002
+            // (box.longitudeSpan is deprecated in osmdroid; east minus west is the same number here.)
+            val longitudeSpan = abs(box.lonEast - box.lonWest)
+            val tiny = box.latitudeSpan < 0.0002 && longitudeSpan < 0.0002
             // post {}: the map must have its size before it can fit a box.
             if (!tiny) mapView.post { mapView.zoomToBoundingBox(box, true, 100) }
         }
