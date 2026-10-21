@@ -48,16 +48,16 @@ fun ChoiceChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(16.dp)
     val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = modifier
-            .heightIn(min = 48.dp)
+            .heightIn(min = 56.dp)
             .clip(shape)
             .toggleable(value = selected, enabled = enabled, role = Role.Checkbox) { onToggle() },
         shape = shape,
         color = if (selected) scheme.primaryContainer else scheme.surface,
-        border = BorderStroke(1.dp, if (selected) scheme.primary else scheme.outline)
+        border = BorderStroke(if (selected) 2.dp else 1.5.dp, if (selected) scheme.primary else scheme.outline)
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -115,7 +115,7 @@ fun RadioChoiceRow(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(16.dp)
     val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = modifier
@@ -124,11 +124,11 @@ fun RadioChoiceRow(
             .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick),
         shape = shape,
         color = if (selected) scheme.primaryContainer else scheme.surface,
-        border = BorderStroke(1.dp, if (selected) scheme.primary else scheme.outline)
+        border = BorderStroke(if (selected) 2.dp else 1.5.dp, if (selected) scheme.primary else scheme.outline)
     ) {
         Row(
             modifier = Modifier
-                .heightIn(min = 52.dp)
+                .heightIn(min = 56.dp)
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

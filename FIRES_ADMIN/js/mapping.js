@@ -69,6 +69,7 @@ export function mapIncident(id, d, extra = {}) {
     reporterName: esc(d.reporterName || "Unknown"),
     reporterContact: esc(d.reporterContact || ""),
     description: esc(d.description),
+    fireType: d.fireType || "other",
     loc: addr ? esc(addr) : hasCoords ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "No location",
     lat: hasCoords ? lat : null, lng: hasCoords ? lng : null,
     locSource: d.locationSource === "pin" ? "Pin" : "GPS",
@@ -83,7 +84,7 @@ export function mapIncident(id, d, extra = {}) {
     photoUrl: null,
     submittedMs, updatedMs,
     submittedAt: fmtPH(submittedMs),
-    dateResolved: null, resolvedMs: null, remarks: "",
+    dateResolved: null, resolvedMs: null, resolvedBy: "", remarks: "",
     res: [], msgs: [],
     assignLoaded: false, detailState: "idle"
   };
@@ -97,6 +98,7 @@ export function mapIncident(id, d, extra = {}) {
 export function applyRecord(i, r) {
   i.resolvedMs = toMs(r.dateResolved);
   i.dateResolved = i.resolvedMs != null ? fmtPH(i.resolvedMs) : null;
+  i.resolvedBy = String(r.resolvedBy || "");
   i.remarks = esc(r.remarks);
 }
 

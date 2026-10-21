@@ -318,7 +318,7 @@ service cloud.firestore {
 
         function validLocation(d) {
           return d.keys().hasOnly(['latitude', 'longitude', 'heading', 'speed',
-                                   'etaSeconds', 'distanceMeters', 'updatedAt'])
+                                   'etaSeconds', 'distanceMeters', 'routePath', 'trail', 'updatedAt'])
             && d.keys().hasAll(['latitude', 'longitude', 'updatedAt'])
             && d.latitude is number && d.latitude >= -90 && d.latitude <= 90
             && d.longitude is number && d.longitude >= -180 && d.longitude <= 180
@@ -326,6 +326,12 @@ service cloud.firestore {
             && optionalNumber(d, 'speed', 0, 200)               // m/s, far above any fire truck
             && optionalWholeNumber(d, 'etaSeconds', 86400)      // up to 24 hours
             && optionalWholeNumber(d, 'distanceMeters', 1000000) // up to 1,000 km
+            // The responder's current route: latitude, longitude, latitude... (at most 120 points).
+            && (d.get('routePath', null) == null
+                || (d.routePath is list && d.routePath.size() <= 240 && d.routePath.size() % 2 == 0))
+            // Where the responder has just driven: latitude, longitude, latitude... (at most 60 points).
+            && (d.get('trail', null) == null
+                || (d.trail is list && d.trail.size() <= 120 && d.trail.size() % 2 == 0))
             // The time is the server's, so a phone with a wrong clock cannot fake "just now".
             && d.updatedAt == request.time;
         }
@@ -399,6 +405,26 @@ service cloud.firestore {
       allow update: if isStaff()
         && (resource.data.resolvedBy == request.auth.uid || isAdmin())
         && validRecord(request.resource.data);
+    }
+
+    // =====================================================================
+    // activity/{id}: the website's activity log (one line per administrator action)
+    // =====================================================================
+
+    match /activity/{entryId} {
+      function validActivity(d) {
+        return d.keys().hasOnly(['type', 'text', 'actorId', 'actorName', 'incidentId', 'createdAt'])
+          && d.type in ['verify', 'false', 'duplicate', 'assign', 'role', 'create']
+          && isText(d.text, 200)
+          && d.actorId == request.auth.uid
+          && isText(d.actorName, 80)
+          && isText(d.get('incidentId', ''), 40)
+          && d.createdAt == request.time;
+      }
+
+      allow read: if isAdmin();
+      allow create: if isAdmin() && validActivity(request.resource.data);
+      allow update, delete: if false;
     }
 
     // =====================================================================

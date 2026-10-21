@@ -106,6 +106,8 @@ data class ResponderLocation(
     var speed: Double? = null,                // metres per second
     var etaSeconds: Int? = null,              // estimated time to the scene
     var distanceMeters: Int? = null,          // road distance to the scene
+    var trail: List<Double>? = null,          // where the responder has just driven: lat, lng, lat, lng...
+    var routePath: List<Double>? = null,      // the responder's current road route: lat, lng, lat, lng...
     @ServerTimestamp var updatedAt: Timestamp? = null
 )
 

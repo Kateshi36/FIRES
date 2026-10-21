@@ -46,7 +46,9 @@ class ResponderLocationRepository(private val db: FirebaseFirestore = FirebaseFi
         heading: Double?,
         speed: Double?,
         etaSeconds: Int? = null,
-        distanceMeters: Int? = null
+        distanceMeters: Int? = null,
+        routePath: List<Double>? = null,
+        trail: List<Double>? = null
     ): Task<Void> = doc(incidentId, responderId).set(
         mapOf(
             "latitude" to latitude,
@@ -56,6 +58,10 @@ class ResponderLocationRepository(private val db: FirebaseFirestore = FirebaseFi
             // Kept inside the limits the Firestore rules accept (24 hours, 1,000 km).
             "etaSeconds" to etaSeconds?.coerceIn(0, 86_400),
             "distanceMeters" to distanceMeters?.coerceIn(0, 1_000_000),
+            // The responder's own current route, so the citizen sees the path they really follow.
+            "routePath" to routePath,
+            // Where the responder has really driven, even when it is not the planned route.
+            "trail" to trail,
             "updatedAt" to FieldValue.serverTimestamp()
         ),
         SetOptions.merge()

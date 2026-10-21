@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 let pw;
 try { pw = require("playwright"); } catch { pw = require("/opt/npm-tools/node_modules/playwright"); }
 
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
 const server = http.createServer((req, res) => {
   const p = normalize(join(ROOT, decodeURIComponent(req.url.split("?")[0])));
   if (!p.startsWith(ROOT) || !existsSync(p)) { res.writeHead(404); res.end(); return; }
@@ -58,7 +58,9 @@ async function fresh() {
   await page.waitForSelector("#main h1");
   return { page, errors, ctx };
 }
-const calls = page => page.evaluate(() => window.__fake.calls);
+// The writes to incidents / assignments / users. The activity log line each of them leaves behind is checked separately.
+const calls = page => page.evaluate(() => window.__fake.calls.filter(c => !String(c.path).startsWith("activity/")));
+const logLines = page => page.evaluate(() => window.__fake.calls.filter(c => String(c.path).startsWith("activity/")));
 const openFromRecords = async (page, id) => {
   await page.click('aside button[data-t="rec"]');
   await page.waitForSelector("tbody tr[data-id]");
@@ -200,8 +202,8 @@ await test("names: \"O'Brien & Sons\" is stored as typed and shown once-escaped,
   assert.doesNotMatch(drawer, /&amp;|&#39;|&amp;amp;/);
   await page.click("#cx");
   await page.click('aside button[data-t="over"]');                    // Overview workload card
-  await page.waitForSelector(".card h3");
-  const wl = await page.locator(".card", { hasText: "Responder workload" }).textContent();
+  await page.waitForSelector(".card h2");
+  const wl = await page.locator(".card", { hasText: "Needs attention" }).textContent();
   assert.match(wl, /O'Brien/);
   assert.doesNotMatch(wl, /&amp;|&#39;/);
 });
@@ -210,7 +212,7 @@ await test("Overview workload and User accounts 'Assigned' update after Save, wi
   await page.click('aside button[data-t="resp"]');
   await page.waitForSelector("#tb tr");
   const row = name => page.locator("#tb tr", { hasText: name });
-  assert.equal((await row("Ana Cruz").locator("td").nth(4).textContent()).trim(), "0");
+  assert.equal((await row("Ana Cruz").locator("td").nth(4).textContent()).trim(), "0 active");
   await page.click('aside button[data-t="rec"]');
   await page.waitForSelector("tbody tr[data-id]");
   await page.click('tbody tr[data-id="ver00001"]');
@@ -222,7 +224,103 @@ await test("Overview workload and User accounts 'Assigned' update after Save, wi
   await page.click("#cx");
   await page.click('aside button[data-t="resp"]');
   await page.waitForSelector("#tb tr");
-  assert.equal((await row("Ana Cruz").locator("td").nth(4).textContent()).trim(), "1");
+  assert.equal((await row("Ana Cruz").locator("td").nth(4).textContent()).trim(), "1 active");
+});
+
+// ---- Admin redesign, round 2: the screens match the mockups and show only real data ----
+const csvOf = async (page, click) => {
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.click(click)]);
+  return (await import("node:fs")).readFileSync(await dl.path(), "utf8");
+};
+
+await test("Overview: greeting header, connection pill, four tiles, Needs attention table, export", async page => {
+  assert.match(await page.locator("#main h1").textContent(), /^Good (morning|afternoon|evening)/);
+  assert.match(await page.locator("#conn").textContent(), /Connected/);
+  const tiles = await page.locator(".kpi .kl").allTextContents();
+  assert.deepEqual(tiles, ["Active incidents", "Reports this month", "Median time to resolve", "Responders"]);
+  assert.match(await page.locator(".card", { hasText: "Needs attention" }).textContent(), /INC-REP000/);
+  const csv = await csvOf(page, "#exp");
+  assert.match(csv, /rep00001/);
+  assert.match(await page.locator("aside .me").textContent(), /Admin One/);
+});
+
+await test("Records: counted chips, filters, sort, selection and CSV export of only the selected rows", async page => {
+  await page.click('aside button[data-t="rec"]');
+  await page.waitForSelector("#tb tr[data-id]");
+  assert.deepEqual(await page.locator("#rchips .chip").allTextContents(),
+    ["All · 7", "Needs review · 4", "Active · 5", "Resolved · 1", "False or duplicate · 1"]);
+  assert.equal(await page.locator("#tb tr[data-id]").count(), 7);
+  assert.match(await page.locator(".pager").textContent(), /Showing 1-7 of 7/);
+  await page.click('#rchips .chip[data-c="resolved"]');
+  assert.equal(await page.locator("#tb tr[data-id]").count(), 1);
+  await page.click('#rchips .chip[data-c="all"]');
+  await page.fill("#q", "no such place");
+  assert.match(await page.locator("#tb").textContent(), /No incidents match/);
+  await page.fill("#q", "");
+  await page.check('[data-sel="rep00001"]');
+  await page.check('[data-sel="res00001"]');
+  assert.match(await page.locator(".selbar").textContent(), /2 selected/);
+  const csv = await csvOf(page, "#xsel");
+  assert.match(csv, /rep00001/); assert.match(csv, /res00001/); assert.doesNotMatch(csv, /ver00001/);
+  await page.click("#clrsel");
+  assert.equal(await page.locator(".selbar").count(), 0);
+  assert.match(await csvOf(page, "#rcsv"), /ver00001/);          // Export CSV = everything in the view
+});
+
+await test("Records: rows open the review drawer, and the Responder column is read once per row", async page => {
+  await page.click('aside button[data-t="rec"]');
+  await page.waitForSelector("#tb tr[data-id]");
+  await page.waitForFunction(() => !document.querySelector("#tb").textContent.includes("..."));
+  assert.match(await page.locator('#tb tr[data-id="rep00001"]').textContent(), /Unassigned/);
+  assert.match(await page.locator('#tb tr[data-id="res00001"]').textContent(), /None/);
+  await page.click('#tb tr[data-id="rep00001"] td:nth-child(3)');
+  await page.waitForSelector("#drawer.open");
+});
+
+await test("User accounts: role chips with counts, a detail panel, and the existing role action", async page => {
+  await page.click('aside button[data-t="resp"]');
+  await page.waitForSelector("#tb tr[data-uid]");
+  assert.deepEqual(await page.locator("[data-r]").allTextContents(), ["All · 4", "Responders · 2", "Citizens · 1", "Admins · 1"]);
+  assert.match(await page.locator("#upanel").textContent(), /Ana Cruz/);
+  assert.equal(await page.locator('#upanel [data-act="remove"]').count(), 1);
+  await page.click('[data-m="c1"]');
+  assert.match(await page.locator("#upanel").textContent(), /Citizen Cee/);
+  assert.equal(await page.locator('#upanel [data-act="make"]').count(), 1);
+  await page.click('[data-m="admin1"]');
+  assert.equal(await page.locator("#upanel .btn.dng").isDisabled(), true);
+  await page.click('[data-r="citizen"]');
+  assert.equal(await page.locator("#tb tr[data-uid]").count(), 1);
+});
+
+await test("Reports: range chips, four tiles, charts, and nothing is written", async page => {
+  await page.click('aside button[data-t="rep"]');
+  await page.waitForSelector(".kpi");
+  assert.deepEqual(await page.locator("#main .chips .chip").allTextContents(), ["Last 7 days", "Last 30 days", "This quarter", "Custom range"]);
+  assert.deepEqual(await page.locator(".kpi .kl").allTextContents(), ["Reports", "Confirmed fires", "Median time to resolve", "Resolved within 1 h"]);
+  for (const h of ["By type", "When fires get reported", "By purok"]) assert.ok(await page.locator("h2", { hasText: h }).count(), h);
+  await page.click('[data-days="q"]');
+  await page.waitForSelector(".kpi");
+  await page.click('[data-days="custom"]');
+  assert.equal(await page.locator("#rcustom").isVisible(), true);
+  assert.deepEqual(await calls(page), []);
+});
+
+await test("Activity log: an administrator action leaves exactly one allowed line, and the feed shows it", async page => {
+  await openFromRecords(page, "rep00001");
+  await page.click('[data-rv="verify"]');
+  await page.waitForFunction(() => document.querySelector("#toast").style.display === "block");
+  const lines = await logLines(page);
+  assert.equal(lines.length, 1);
+  assert.deepEqual(Object.keys(lines[0].data).sort(), ["actorId", "actorName", "createdAt", "incidentId", "text", "type"]);
+  assert.equal(lines[0].data.type, "verify"); assert.equal(lines[0].data.incidentId, "rep00001");
+  await page.click("#cx");
+  await page.click('aside button[data-t="act"]');
+  await page.waitForSelector(".ev");
+  assert.match(await page.locator(".feed").textContent(), /verified INC-REP000/);
+  assert.deepEqual(await page.locator(".chip[data-c]").allTextContents(), ["Everything", "Reports", "Assignments", "Accounts", "Admin actions"]);
+  await page.click('.chip[data-c="admin"]');
+  assert.equal(await page.locator(".ev").count(), 1);
+  assert.deepEqual(await page.locator(".trow").allTextContents(), ["Sound on new report", "Browser notification", "Warn if unassigned over 5 min"]);
 });
 
 await browser.close(); server.close();

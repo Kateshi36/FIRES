@@ -1,0 +1,44 @@
+F.I.R.E.S. ADMIN WEBSITE: HOW TO UPDATE THE LIVE SITE
+Live address: https://fires-a81c0.web.app
+Cost: free (Firebase Hosting, Spark plan)
+
+BEFORE YOU START
+- Your changed files must be saved in:
+  C:\xampp\htdocs\FIRES\FIRES\FIRES_ADMIN
+- Node.js and the Firebase CLI are already installed (you deployed before).
+
+STEPS
+1. Open Command Prompt or PowerShell.
+
+2. Go to the website folder (the one that contains firebase.json):
+     cd C:\xampp\htdocs\FIRES\FIRES\FIRES_ADMIN
+
+3. If it says you are not logged in, sign in first:
+     firebase login
+
+4. Deploy:
+     firebase deploy --only hosting
+
+5. Wait for "Deploy complete!". It prints the live address.
+   This update uploads 17 files (the new one is js/theme.js).
+
+6. Open https://fires-a81c0.web.app and press Ctrl+F5.
+   You should see the new design and the "Dark mode" button
+   at the bottom of the sidebar (top-right on the login page).
+
+OPTIONAL CHECK
+     node check-deploy.mjs https://fires-a81c0.web.app
+   It confirms the live pages load and the test/docs files are not published.
+
+IF SOMETHING LOOKS WRONG
+- Old design still showing: open the site in a private window.
+  Your browser cached it. The deploy is fine.
+- "Not in a Firebase app directory": you are in the wrong folder.
+  Run step 2 again.
+- "Permission denied" or wrong project: run  firebase login  again and
+  check that  .firebaserc  says fires-a81c0.
+- Roll back: Firebase Console > Hosting > Release history >
+  choose the previous version > Rollback.
+
+EVERY FUTURE UPDATE
+Steps 2 and 4 only.

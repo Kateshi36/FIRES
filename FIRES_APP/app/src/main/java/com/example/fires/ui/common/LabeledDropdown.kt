@@ -76,7 +76,7 @@ fun LabeledDropdown(
                 enabled = enabled,
                 singleLine = true,
                 isError = error != null,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
                 trailingIcon = {
@@ -95,7 +95,7 @@ fun LabeledDropdown(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable(enabled = enabled, role = Role.DropdownList) { expanded = true }
             )
 

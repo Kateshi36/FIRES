@@ -41,13 +41,19 @@ test("no chat: the website never writes or even reads the messages collection fo
   assert.equal(/<textarea|type=["']?text["']?[^>]*(message|chat)/i.test(all), false);
   assert.equal(/addDoc|deleteDoc|writeBatch/.test(all.replace(/import[^;]*;/g, "")), false);   // no other kind of write exists
   const writes = [...code["js/data.js"].matchAll(/\b(setDoc|updateDoc)\(\s*(?:ref|doc\(db,\s*("[^"]+"))/g)].map(m => m[1]);
-  assert.equal(writes.length, 3);                                   // assignment, new user profile, role change
+  assert.equal(writes.length, 3);                                   // assignment, new user profile, role change (the activity log line is checked below)
   assert.equal(/"messages"[^)]*\)\s*,\s*\{/.test(code["js/data.js"].replace(/getDocs\([^)]*\)/g, "")), false);
 });
 
-test("every write call is one of the four known ones", () => {
+test("every write call is one of the five known ones", () => {
   const calls = [...all.matchAll(/\b(tx\.update|tx\.set|tx\.delete|setDoc|updateDoc)\(/g)].map(m => m[1]).sort();
-  assert.deepEqual(calls, ["setDoc", "setDoc", "tx.update", "updateDoc"]);   // assignment, profile, verify, role
+  assert.deepEqual(calls, ["setDoc", "setDoc", "setDoc", "tx.update", "updateDoc"]);   // assignment, profile, activity log line, verify, role
+});
+
+test("the activity log is the only new collection written, and only through logActivity", () => {
+  const d = code["js/data.js"];
+  assert.equal((d.match(/doc\(collection\(db, "activity"\)\)/g) || []).length, 1);
+  assert.equal(/setDoc\(doc\(collection\(db, "(?!activity)/.test(d), false);
 });
 
 test("the verify write has exactly three fields for each of the three actions, through the real code", async () => {

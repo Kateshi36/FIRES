@@ -21,5 +21,5 @@ fun statusDetail(status: IncidentStatus): String = when (status) {
     IncidentStatus.RESOLVED -> "Thank you for reporting. You can still read the chat for this report."
     // Closed after review (false report or a duplicate of another report). Deliberately does not
     // say which: the citizen should not be accused, and a duplicate is already being handled.
-    IncidentStatus.DISMISSED -> "Responders reviewed it and closed it. If a fire is still burning, call 911 right away."
+    IncidentStatus.DISMISSED -> "Responders reviewed it and closed it. If a fire is still burning, report it again right away."
 }

@@ -51,3 +51,16 @@ test("assign: a built payload only has keys the rules allow", { skip }, () => {
     { responderId: "u1", responderName: "Ana", unit: UNITS[0], assignedResources: ["Fire truck"] }, {});
   for (const key of Object.keys(data)) assert.ok(allowed.includes(key), key);
 });
+
+test("activity log: the fields the website writes are all ones the rules accept, and admins only", { skip }, async () => {
+  const { activityDoc, ACTIVITY_TYPES } = await import("../js/viewRules.js");
+  const keys = listAfter("function validActivity");
+  const types = [...rules.slice(rules.indexOf("function validActivity")).match(/d\.type in \[([^\]]*)\]/)[1].matchAll(/'([^']*)'/g)].map(x => x[1]);
+  for (const t of ACTIVITY_TYPES) assert.ok(types.includes(t), `rules do not accept activity type ${t}`);
+  const d = activityDoc("verify", "x", { id: "a", name: "A" }, "inc1");
+  for (const k of [...Object.keys(d), "createdAt"]) assert.ok(keys.includes(k), `rules do not allow ${k}`);
+  const block = rules.slice(rules.indexOf("match /activity/"));
+  assert.match(block, /allow read: if isAdmin\(\);/);
+  assert.match(block, /allow create: if isAdmin\(\)/);
+  assert.match(block, /allow update, delete: if false;/);
+});

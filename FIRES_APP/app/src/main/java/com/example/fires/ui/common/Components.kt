@@ -89,8 +89,8 @@ fun PrimaryButton(
         enabled = enabled && !loading,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
-        shape = RoundedCornerShape(14.dp),
+            .height(56.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(containerColor = containerColor)
     ) {
         if (loading) {
@@ -117,8 +117,8 @@ fun SecondaryButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
-        shape = RoundedCornerShape(14.dp)
+            .height(56.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Text(text, style = MaterialTheme.typography.labelLarge)
     }
@@ -157,7 +157,7 @@ fun LabeledTextField(
             singleLine = singleLine,
             minLines = minLines,
             isError = error != null,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
             keyboardOptions = KeyboardOptions(
                 keyboardType = if (isPassword) KeyboardType.Password else keyboardType

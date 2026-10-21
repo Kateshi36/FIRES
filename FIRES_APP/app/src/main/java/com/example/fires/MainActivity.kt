@@ -4,9 +4,12 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.DisposableEffect
 import com.example.fires.ui.navigation.AppNavHost
 import com.example.fires.ui.theme.FIRESTheme
+import com.example.fires.ui.theme.ThemeSettings
 import com.example.fires.util.AlertIntents
 import com.example.fires.util.CitizenScreen
 import com.example.fires.util.PendingCitizenTarget
@@ -15,6 +18,7 @@ import com.example.fires.util.PendingAlertTarget
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ThemeSettings.load(this)
         enableEdgeToEdge()
 
         // Only on a fresh launch. When Android recreates the screen (rotation, or the app coming
@@ -23,7 +27,19 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) readAlertTarget(intent)
 
         setContent {
-            FIRESTheme {
+            val dark = ThemeSettings.isDark()
+            // System bar icons follow the app's light / dark choice, not only the phone's setting.
+            DisposableEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { dark },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        android.graphics.Color.argb(0xe6, 0xff, 0xff, 0xff),
+                        android.graphics.Color.argb(0x80, 0x1b, 0x1b, 0x1b)
+                    ) { dark }
+                )
+                onDispose { }
+            }
+            FIRESTheme(darkTheme = dark) {
                 AppNavHost()
             }
         }

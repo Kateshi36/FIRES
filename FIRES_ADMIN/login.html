@@ -1,15 +1,26 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>F.I.R.E.S. Admin Sign in</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#FAF7F5"><link rel="icon" type="image/svg+xml" href="favicon.svg"><script src="js/theme.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/login.css">
 </head>
 <body><div class="split">
-<section class="brand"><div class="mark">F.I.R.E.S.</div><h2>Fire Incident &amp; Response<br>Emergency System</h2><p>Manage responder accounts, monitor incidents on the map and review records for Barangay Bagumbayan.</p><div class="blob"></div></section>
+<section class="brand">
+<div class="mark"><img class="flame" src="favicon.svg" alt="" width="52" height="52">F.I.R.E.S.</div>
+<h2>Fire Incident &amp; Response<br>Emergency System</h2>
+<p class="intro">The admin panel for Barangay Bagumbayan.</p>
+<ul class="points">
+<li><span class="n">1</span><span><b>Review reports</b><small>Verify real fires, close false and duplicate ones.</small></span></li>
+<li><span class="n">2</span><span><b>Assign responders</b><small>Send the right unit to the right incident.</small></span></li>
+<li><span class="n">3</span><span><b>Watch the live map</b><small>See every active incident and responder at once.</small></span></li>
+</ul>
+<div class="blob" aria-hidden="true"></div>
+</section>
 <section class="panel"><form id="f" novalidate>
 <h1>Administrator sign in</h1><p class="lead">Only administrator accounts can open this panel.</p>
 <div id="err" class="err" role="alert" hidden></div>
 <label>Email<input id="em" type="email" autocomplete="username" placeholder="Enter your email"></label>
 <label>Password<span class="pw"><input id="pw" type="password" autocomplete="current-password" placeholder="Enter your password"><button type="button" id="eye" aria-label="Show password">Show</button></span></label>
 <button class="go" id="go" type="submit">Sign in</button>
-</form></section></div><script type="module" src="js/login.js"></script></body></html>
+<p class="note">Administrator accounts are created by the system administrator. There is no public sign up.</p>
+</form><button type="button" class="themebtn" data-theme-toggle aria-pressed="false"><span class="tl">Dark mode</span></button></section></div><script type="module" src="js/login.js"></script></body></html>

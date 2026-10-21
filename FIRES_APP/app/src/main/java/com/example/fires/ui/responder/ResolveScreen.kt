@@ -139,7 +139,7 @@ private fun Form(state: ResolveUiState, incident: Incident, onRemarksChange: (St
         // Which incident this is for, so the responder is never unsure what they are closing.
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.dp, Border),
             color = MaterialTheme.colorScheme.surface
         ) {

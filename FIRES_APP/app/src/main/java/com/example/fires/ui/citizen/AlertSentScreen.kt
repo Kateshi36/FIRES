@@ -49,9 +49,6 @@ import com.example.fires.ui.theme.FireRed
 import com.example.fires.viewmodel.AlertSentUiState
 import com.example.fires.viewmodel.AlertSentViewModel
 
-/** Philippine national emergency number. Swap in the B-FLARE / BDRRMO hotline once it is confirmed. */
-private const val EMERGENCY_NUMBER = "911"
-
 /**
  * Confirmation after a report is sent (D6). It never claims more than is true:
  *  - Sending: the report is saved on this phone and goes out by itself when there is signal
@@ -125,8 +122,7 @@ fun AlertSentContent(
                     Spacer(Modifier.height(16.dp))
                     BodyText(
                         "Your report is saved on this phone and will be sent automatically as soon " +
-                            "as you are back online. Keep the app open if you can. " +
-                            "If it is urgent, call $EMERGENCY_NUMBER."
+                            "as you are back online. Keep the app open if you can."
                     )
                 }
             }
@@ -157,7 +153,7 @@ private fun DeliveryNotice(delivery: DeliveryState) {
     when (delivery) {
         DeliveryState.SENT -> Surface(
             modifier = announce,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
@@ -170,7 +166,7 @@ private fun DeliveryNotice(delivery: DeliveryState) {
 
         DeliveryState.SENDING -> Surface(
             modifier = announce,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             color = Amber.copy(alpha = 0.16f),
             contentColor = MaterialTheme.colorScheme.onSurface
         ) {
@@ -186,8 +182,7 @@ private fun DeliveryNotice(delivery: DeliveryState) {
         }
 
         DeliveryState.FAILED -> ErrorBanner(
-            "We couldn't deliver your report. Please go back and send it again. " +
-                "If it is urgent, call $EMERGENCY_NUMBER."
+            "We couldn't deliver your report. Please go back and send it again."
         )
     }
 }

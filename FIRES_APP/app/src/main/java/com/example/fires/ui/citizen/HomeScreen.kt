@@ -1,5 +1,22 @@
 package com.example.fires.ui.citizen
 
+import com.example.fires.ui.theme.ThemeMenuItem
+import com.example.fires.ui.theme.Ember
+import com.example.fires.ui.theme.FireRedSoft
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material3.Button
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import android.content.Intent
+import android.net.Uri
+import com.example.fires.ui.theme.FireRed
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.fires.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -114,11 +131,10 @@ fun HomeContent(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.LocalFireDepartment,
+                Image(
+                    painter = painterResource(R.drawable.ic_logo),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
@@ -138,6 +154,7 @@ fun HomeContent(
                                 onMyReportsClick()
                             }
                         )
+                        ThemeMenuItem(onDone = { menuOpen = false })
                         DropdownMenuItem(
                             text = { Text("Sign out") },
                             onClick = {
@@ -211,17 +228,22 @@ fun HomeContent(
 
             // ---- SOS ----
             Column(
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 SosButton(onClick = onSosClick)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Tap to report",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 40.dp),
+                    text = "Tap to report a fire",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            // ---- Bottom bar (from the approved mockup) ----
+            HomeBottomBar(onMyReports = onMyReportsClick)
         }
     }
 
@@ -243,24 +265,55 @@ fun HomeContent(
     }
 }
 
-/** The big red round button. Opens the report form. */
+/** The big red round button, on a soft halo. Opens the report form. */
 @Composable
 private fun SosButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(148.dp)
-            .shadow(8.dp, CircleShape)
+            .size(196.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary)
-            .semantics { contentDescription = "SOS. Report a fire." }
-            .clickable(onClickLabel = "Report a fire", role = Role.Button, onClick = onClick),
+            .background(FireRedSoft),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "SOS",
-            color = Color.White,
-            fontSize = 40.sp,
-            fontWeight = FontWeight.Bold
+        Box(
+            modifier = Modifier
+                .size(148.dp)
+                .shadow(12.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Ember)
+                .semantics { contentDescription = "SOS. Report a fire." }
+                .clickable(onClickLabel = "Report a fire", role = Role.Button, onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "SOS",
+                color = Color.White,
+                fontSize = 40.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.5.sp
+            )
+        }
+    }
+}
+
+/** Home and My reports. The three-dot menu at the top keeps dark mode and sign out. */
+@Composable
+private fun HomeBottomBar(onMyReports: () -> Unit) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        windowInsets = WindowInsets(0, 0, 0, 0)
+    ) {
+        NavigationBarItem(
+            selected = true,
+            onClick = {},
+            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+            label = { Text("Home") }
+        )
+        NavigationBarItem(
+            selected = false,
+            onClick = onMyReports,
+            icon = { Icon(Icons.Filled.Description, contentDescription = null) },
+            label = { Text("My reports") }
         )
     }
 }

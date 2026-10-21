@@ -55,7 +55,7 @@ fun LocationBanner(location: LocationAccess, modifier: Modifier = Modifier) {
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Row(

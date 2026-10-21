@@ -95,6 +95,7 @@ class LocationShareService : Service() {
     private var lastRouteAsk: RouteRules.RouteFix? = null
     private var routeJob: Job? = null
     private var currentRoute: LiveRoute? = null
+    private var trail: List<LatLon> = emptyList()   // recent positions, shared as the path driven
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -148,6 +149,7 @@ class LocationShareService : Service() {
         lastWrite = null
         lastRouteAsk = null
         currentRoute = null
+        trail = emptyList()
         LocationShareState.set(id)
         watchStatus(id)
         if (!startLocationUpdates()) stopBecausePermissionIsGone()
@@ -227,6 +229,7 @@ class LocationShareService : Service() {
         updateGpsLost(false) // a fix arrived, so location works again
         val now = System.currentTimeMillis()
         lastLocation = location
+        trail = RouteRules.appendToTrail(trail, LatLon(location.latitude, location.longitude))
         // The screen's map follows every fix, written or not.
         LocationShareState.setPosition(LatLon(location.latitude, location.longitude))
         refreshRouteIfDue(id, location, now)
@@ -249,7 +252,9 @@ class LocationShareService : Service() {
             // H5d: a straight-line estimate has no ETA, so these are null and the citizen's banner
             // reads "Responder is on the way" without a time.
             etaSeconds = RouteRules.etaSecondsToWrite(route),
-            distanceMeters = RouteRules.distanceMetersToWrite(route)
+            distanceMeters = RouteRules.distanceMetersToWrite(route),
+            routePath = RouteRules.pathToShare(route),
+            trail = RouteRules.trailToShare(trail)
         ).addOnFailureListener { e -> Log.w(TAG, "Could not write the position", e) }
     }
 
@@ -366,6 +371,7 @@ class LocationShareService : Service() {
         lastLocation = null
         lastRouteAsk = null
         currentRoute = null
+        trail = emptyList()
 
         val id = incidentId
         val uid = responderId

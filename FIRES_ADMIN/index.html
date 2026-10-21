@@ -1,17 +1,18 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>F.I.R.E.S. Admin</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#FAF7F5"><link rel="icon" type="image/svg+xml" href="favicon.svg"><script src="js/theme.js?v=4"></script>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/styles.css?v=9">
 <style id="guard">html{visibility:hidden}</style>
 <script>setTimeout(function(){if(document.getElementById("guard"))location.replace("login.html")},15000)</script></head>
 <body><div class="app">
-<aside><div class="logo">F.I.R.E.S.</div><div class="sub">Admin panel, Brgy. Bagumbayan</div>
-<button data-t="over" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</button><button data-t="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Live map</button><button data-t="resp"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5 6.5-5s5.7 1.5 6.5 5"/><path d="M16 4.5a3.5 3.5 0 010 7M18 15c2 .6 3.2 2.2 3.5 5"/></svg>User accounts</button><button data-t="rec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>Incident records</button><button data-t="rep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reports</button>
-<div class="me"><b id="me-name"></b><br><span id="me-email"></span></div></aside>
-<div class="content"><header class="top"><span id="today"></span><div class="who"><span class="av" id="av"></span><span id="nm"></span><button class="btn ghost" id="out">Log out</button></div></header><main id="main"></main></div></div>
+<aside><div class="brand"><img src="favicon.svg" alt="" width="40" height="40"><div><div class="logo">F.I.R.E.S.</div><div class="sub">Admin · Bagumbayan</div></div></div>
+<nav><button data-t="over" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</button><button data-t="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Live map</button><button data-t="rec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 13h6M10 17h6"/></svg>Incident records</button><button data-t="resp"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6"/></svg>User accounts</button><button data-t="rep"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reports</button><button data-t="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Activity log</button></nav>
+<button type="button" class="themebtn" data-theme-toggle aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/></svg><span class="tl">Dark mode</span></button>
+<div class="me"><span class="av" id="av"></span><div class="meinfo"><b id="nm"></b><span id="me-email"></span><button type="button" class="linkbtn" id="out">Log out</button></div></div></aside>
+<div class="content"><main id="main"></main></div></div>
 <div class="scrim" id="scrim"></div><div class="drawer" id="drawer" aria-live="polite"></div><div id="lb" role="dialog" aria-label="Photo preview"></div><div class="dlg" id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-t"></div><div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="module" src="js/data.js"></script>
-<script type="module" src="js/app.js"></script></body></html>
+<script type="module" src="js/app.js?v=9"></script></body></html>

@@ -91,6 +91,8 @@ fun FiresMap(
     route: List<LatLon> = emptyList(),
     /** Draw [route] as a dashed line: it is only a straight-line estimate, not a road route (H5d). */
     routeDashed: Boolean = false,
+    /** Where the responder has already driven, drawn as a grey line under [route]. Empty means none. */
+    trail: List<LatLon> = emptyList(),
     /**
      * When this changes to a non-null value, the map zooms out once to fit [route]. Use something
      * that stays the same while the route is refreshed (the incident id), so the map does not
@@ -177,6 +179,16 @@ fun FiresMap(
 
                         override fun longPressHelper(p: GeoPoint): Boolean = false
                     })
+                )
+            }
+
+            if (trail.size >= 2) {
+                map.overlays.add(
+                    Polyline(map).apply {
+                        setPoints(trail.map { GeoPoint(it.latitude, it.longitude) })
+                        outlinePaint.color = 0xFF55514E.toInt()
+                        outlinePaint.strokeWidth = 9f
+                    }
                 )
             }
 

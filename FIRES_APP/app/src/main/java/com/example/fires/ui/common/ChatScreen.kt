@@ -140,7 +140,7 @@ fun ChatContent(
 private fun IncidentHeader(incident: Incident) {
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, Border),
         color = MaterialTheme.colorScheme.surface
     ) {

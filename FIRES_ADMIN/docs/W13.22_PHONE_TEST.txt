@@ -1,0 +1,51 @@
+W13.22  Real-phone test: assign on the website, see what the app shows
+No code changes. This is a checklist for you, because I cannot hold a phone. I read the app's code first, so the
+"Expected" lines below are what the code says should happen. If the phone shows something different, that is a finding.
+
+WHAT THE APP CODE SAYS (checked in IncidentActionRules, LocationShareRules, IncidentDetailScreen)
+ 1. "Start response" needs BOTH: status = DISPATCHED  AND  the signed-in responder's uid is the responderId of an
+    assignment (LocationShareRules.canStart).
+ 2. The website cannot dispatch. After Assign the report is still "Verified". So your note is only half right:
+    the assigned responder gets "Start response" AFTER someone presses "Mark as dispatched" in the app.
+    (Any responder can press it, not only the assigned one.)
+ 3. Before dispatch, an assigned responder sees no "Start response" and no explanation. After dispatch, a responder
+    who is NOT assigned sees the note "Only a responder assigned to this incident can share a live location."
+ 4. The app has NO notification for "you were assigned". The responder only finds out by opening the report.
+ 5. Wording problem: the app's Assigned panel says "Assigned by <name>". On the website the saved name is the person
+    ASSIGNED, so it will read "Assigned by Ana Cruz" when the admin assigned Ana. In the app the assigner and the
+    assignee were always the same person (the rules force it), so "Assigned to <name>" is right for both. One-word
+    fix in IncidentDetailScreen.kt (AssignmentRow). Say "fix 5" if you want it.
+
+SETUP: 2 responder accounts (A and B), A's account signed in on the phone, B on a second phone or skip the B checks.
+       A verified incident that is not dispatched yet (verify one from the website first).
+       Website signed in as admin on the PC. Phone has location permission + GPS on.
+
+STEPS AND EXPECTED RESULTS                                                                  Pass / Fail / Notes
+ 1. Website: open the verified report, Assign responder, choose A, unit BFP, tick Fire truck, Save.
+    Expected: drawer lists "A - BFP (Fire truck)" at once. Firebase Console > incidents > the report >
+    assignments has one document with responderId = A's uid, responderName = "A" (plain text), unit, assignedResources,
+    assignedAt.                                                                              ______
+ 2. Phone (A): open the report from the dashboard.
+    Expected: status Verified. Assigned panel shows "Assigned (1)", BFP, Fire truck, and
+    "Assigned by A" (finding 5). NO "Start response", NO Live response panel.                 ______
+ 3. Phone (A): tap "Mark as dispatched".
+    Expected: status Dispatched, and the Live response panel now shows "Start response".      ______
+ 4. Phone (A): tap Start response (accept the battery prompt once).
+    Expected: "Sharing your location". Console > responderLocations gets a document that updates.  ______
+ 5. Phone (B, not assigned) or any citizen phone that reported it: open the same report.
+    B expected: the note "Only a responder assigned to this incident can share a live location."
+    Citizen expected: map with A's marker (or "Waiting for responder location" until the first fix).   ______
+ 6. Website: reopen the report, Assign responder.
+    Expected: A is NOT in the list any more; B is.                                           ______
+ 7. Phone (A): tap "Mark as on scene" (or Resolve later).
+    Expected: sharing stops by itself.                                                       ______
+ 8. Name with a symbol: give a test responder the name  O'Brien & Sons , assign them from the website.
+    Expected: Console shows responderName exactly  O'Brien & Sons , the website shows it once, the app shows it once
+    (no &amp; or &#39;).                                                                     ______
+ 9. Offline check: turn the PC's Wi-Fi off, press Save in the Assign dialog.
+    Expected: "No internet connection" under the buttons, Try again works after Wi-Fi returns, and Console shows ONE
+    assignment document, not two.                                                            ______
+
+REPORT BACK: for each step, Pass or what you saw (a screenshot of step 2 and 5 is enough).
+Decisions this may lead to: (a) accept "dispatch is done in the app" and write it in the docs (W13.23);
+(b) fix 5; (c) later: a "you were assigned" notification (needs the app's alert service, no Cloud Functions needed).

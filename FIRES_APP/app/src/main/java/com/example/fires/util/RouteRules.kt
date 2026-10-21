@@ -3,6 +3,8 @@ package com.example.fires.util
 import com.example.fires.data.model.Route
 import com.example.fires.ui.common.LatLon
 import java.util.Locale
+import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
@@ -79,6 +81,103 @@ object RouteRules {
     /** Same rule for the road distance. A straight line writes nothing, so the citizen sees no ETA. */
     fun distanceMetersToWrite(route: Route?): Int? =
         route?.takeIf { !it.isEstimate }?.distanceMeters
+
+    // ---------- The responder's own path, shared with the citizen ----------
+
+    /** Most numbers (latitude, longitude, latitude...) shared per route: 120 points. The rules allow 240. */
+    const val MAX_SHARED_PATH_NUMBERS = 240
+
+    /**
+     * The responder's current road route as a short list of numbers for Firestore, or null when
+     * there is no real route (a straight-line estimate is never shared). The route is thinned
+     * with Douglas-Peucker: points that sit within a few metres of the line between their
+     * neighbours are dropped, and the tolerance grows until the path fits.
+     */
+    fun pathToShare(route: Route?): List<Double>? {
+        if (route == null || route.isEstimate || route.points.size < 2) return null
+        var tolerance = 5.0
+        var kept = simplify(route.points, tolerance)
+        while (kept.size * 2 > MAX_SHARED_PATH_NUMBERS && tolerance < 5_000.0) {
+            tolerance *= 2
+            kept = simplify(route.points, tolerance)
+        }
+        if (kept.size * 2 > MAX_SHARED_PATH_NUMBERS) return null
+        return kept.flatMap { listOf(round5(it.latitude), round5(it.longitude)) }
+    }
+
+    /** The other direction, for the citizen's map. Anything malformed gives an empty list. */
+    fun pathFromShared(numbers: List<Double>?): List<LatLon> {
+        if (numbers == null || numbers.size < 4 || numbers.size % 2 != 0) return emptyList()
+        return numbers.chunked(2).map { LatLon(it[0], it[1]) }
+    }
+
+    // ---------- The trail the responder has actually driven ----------
+
+    /** A new trail point only after this much movement, so standing still adds nothing. */
+    const val TRAIL_MIN_GAP_METERS = 25.0
+
+    /** Recent points kept: 60 points is 120 numbers, which is what the rules allow. */
+    const val TRAIL_MAX_POINTS = 60
+
+    /** [trail] plus [next], unless [next] is too close to the last point. Oldest points drop off. */
+    fun appendToTrail(trail: List<LatLon>, next: LatLon): List<LatLon> {
+        val last = trail.lastOrNull()
+        if (last != null &&
+            LocationShareRules.distanceMeters(last.latitude, last.longitude, next.latitude, next.longitude) < TRAIL_MIN_GAP_METERS
+        ) return trail
+        return (trail + next).takeLast(TRAIL_MAX_POINTS)
+    }
+
+    /** The trail as latitude, longitude, latitude... for Firestore. Null until there are two points. */
+    fun trailToShare(trail: List<LatLon>): List<Double>? {
+        if (trail.size < 2) return null
+        return trail.takeLast(TRAIL_MAX_POINTS).flatMap { listOf(round5(it.latitude), round5(it.longitude)) }
+    }
+
+    internal fun simplify(points: List<LatLon>, toleranceMeters: Double): List<LatLon> {
+        if (points.size <= 2) return points
+        val keep = BooleanArray(points.size)
+        keep[0] = true
+        keep[points.lastIndex] = true
+        val stack = ArrayDeque<IntArray>()
+        stack.addLast(intArrayOf(0, points.lastIndex))
+        while (stack.isNotEmpty()) {
+            val range = stack.removeLast()
+            val first = range[0]
+            val last = range[1]
+            var worst = -1.0
+            var index = -1
+            for (i in first + 1 until last) {
+                val d = distanceToSegmentMeters(points[i], points[first], points[last])
+                if (d > worst) {
+                    worst = d
+                    index = i
+                }
+            }
+            if (index != -1 && worst > toleranceMeters) {
+                keep[index] = true
+                stack.addLast(intArrayOf(first, index))
+                stack.addLast(intArrayOf(index, last))
+            }
+        }
+        return points.filterIndexed { i, _ -> keep[i] }
+    }
+
+    /** Distance from [p] to the segment a-b, in metres (flat approximation, fine at city scale). */
+    private fun distanceToSegmentMeters(p: LatLon, a: LatLon, b: LatLon): Double {
+        val metersPerDegreeLat = 111_320.0
+        val metersPerDegreeLng = 111_320.0 * cos(Math.toRadians(a.latitude))
+        val bx = (b.longitude - a.longitude) * metersPerDegreeLng
+        val by = (b.latitude - a.latitude) * metersPerDegreeLat
+        val px = (p.longitude - a.longitude) * metersPerDegreeLng
+        val py = (p.latitude - a.latitude) * metersPerDegreeLat
+        val lengthSquared = bx * bx + by * by
+        if (lengthSquared == 0.0) return hypot(px, py)
+        val t = ((px * bx + py * by) / lengthSquared).coerceIn(0.0, 1.0)
+        return hypot(px - t * bx, py - t * by)
+    }
+
+    private fun round5(value: Double): Double = Math.round(value * 100_000.0) / 100_000.0
 
     // ---------- Wording ----------
 

@@ -1,5 +1,13 @@
 package com.example.fires.ui.citizen
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.fires.data.repository.RouteRepository
+import com.example.fires.util.RouteRules
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -127,7 +135,7 @@ fun StatusContent(
                     incident == null -> Column(modifier = Modifier.padding(20.dp)) {
                         ErrorBanner(
                             "We couldn't find this report. If you sent it a moment ago it may not " +
-                                "have been delivered. If it is urgent, call 911."
+                                "have been delivered."
                         )
                     }
 
@@ -168,7 +176,7 @@ private fun ReportDetails(
         if (delivery == DeliveryState.SENDING) {
             Surface(
                 modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = Amber.copy(alpha = 0.16f)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -252,7 +260,7 @@ private fun TrackingBanner(banner: ResponderTrackingRules.Banner) {
     }
     Surface(
         modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = tint.copy(alpha = 0.14f),
         border = BorderStroke(1.dp, tint)
     ) {
@@ -280,8 +288,54 @@ private fun TrackingMap(incident: Incident, responders: List<ResponderLocation>,
     val labels = ResponderTrackingRules.markerLabels(responders, nowMillis)
     val labelById = labels.associateBy { it.responderId }
 
+    // The live path: the road from the nearest sharing responder to the fire, refetched when that
+    // responder has moved about 200 m. Free OSRM, the same service the responder's own map uses.
+    // If it cannot be fetched, a dashed straight line is drawn instead, as an estimate.
+    val tracked = responders.firstOrNull { labelById[it.id]?.fresh == true }
+    // Best of all: the route the responder's own phone is following right now (it changes when
+    // they are re-routed). Only when that is missing does this phone work a route out itself.
+    val sharedPath = RouteRules.pathFromShared(tracked?.routePath)
+    // Where that responder has really driven so far: it shows the way taken, even a different one.
+    val trailLine = RouteRules.pathFromShared(tracked?.trail)
+    val trackedAt = tracked?.let { LatLon(it.latitude, it.longitude) }
+    val cell = trackedAt?.let { "${(it.latitude * 500).roundToInt()},${(it.longitude * 500).roundToInt()}" }
+    var road by remember { mutableStateOf<List<LatLon>>(emptyList()) }
+    var roadFailed by remember { mutableStateOf(false) }
+    LaunchedEffect(tracked?.id, cell, incident.id, sharedPath.isNotEmpty()) {
+        val start = trackedAt
+        if (start == null || sharedPath.size >= 2) {
+            road = emptyList()
+            roadFailed = false
+        } else {
+            try {
+                road = RouteRepository().route(start, scene).points
+                roadFailed = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                roadFailed = true
+            }
+        }
+    }
+    val pathLine = when {
+        trackedAt == null -> emptyList()
+        sharedPath.size >= 2 -> sharedPath
+        road.size >= 2 && !roadFailed -> road
+        else -> listOf(trackedAt, scene)
+    }
+
+    val etaSeconds = tracked?.etaSeconds?.takeIf { it > 0 }
+    if (etaSeconds != null) {
+        val minutes = ((etaSeconds + 59) / 60).coerceAtLeast(1)
+        val away = tracked?.distanceMeters?.let { " · " + "%.1f".format(it / 1000.0) + " km away" } ?: ""
+        Text(
+            text = "Arrives in about $minutes min$away",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+    }
     FiresMap(
-        modifier = Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(12.dp)),
+        modifier = Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(16.dp)),
         center = scene,
         zoom = 16.0,
         markers = listOf(
@@ -304,6 +358,9 @@ private fun TrackingMap(incident: Incident, responders: List<ResponderLocation>,
                 )
             }
         },
+        route = pathLine,
+        trail = trailLine,
+        routeDashed = sharedPath.size < 2 && (roadFailed || road.size < 2),
         fitRouteKey = incident.id,
         fitPoints = listOf(scene) + targets.values
     )
@@ -319,7 +376,8 @@ private fun TrackingMap(incident: Incident, responders: List<ResponderLocation>,
         }
     }
     Text(
-        "The dots move as the responders get closer. A grey dot means its location is out of date.",
+        if (pathLine.size >= 2) "The blue line is the way to the fire and updates as the responder moves. The grey line is where the responder has already driven. A dashed line is only a rough estimate."
+        else "The dots move as the responders get closer. A grey dot means its location is out of date.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp)

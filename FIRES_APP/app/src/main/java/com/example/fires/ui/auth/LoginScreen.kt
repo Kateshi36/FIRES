@@ -1,5 +1,8 @@
 package com.example.fires.ui.auth
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.fires.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -192,11 +195,10 @@ fun LoginContent(
 @Composable
 internal fun AuthHeader(subtitle: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = Icons.Filled.LocalFireDepartment,
+        Image(
+            painter = painterResource(R.drawable.ic_logo),
             contentDescription = null, // decorative, the title below says the same thing
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(64.dp)
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -223,7 +225,7 @@ internal fun ErrorBanner(message: String, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .semantics { liveRegion = LiveRegionMode.Polite },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Row(

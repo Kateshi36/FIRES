@@ -12,7 +12,7 @@ import { ROLE_CHANGES, canChange } from "./roleRules.js";
 import { isVerifyKind, canVerify, buildVerifyUpdate, patchIncident } from "./verifyRules.js";
 import { isAssignmentPayload, sameAssignment, buildAssignment, addAssignment } from "./assignRules.js";
 import {
-  mapUser, mapIncident, applyRecord, mapAssignment, mapMessage, photoDataUrl, toMs
+  mapUser, mapIncident, applyRecord, mapAssignment, mapMessage, photoDataUrl, toMs, esc
 } from "./mapping.js";
 
 export const U = [];
@@ -112,6 +112,22 @@ export async function loadRange(fromMs, toMs, max = RANGE_LIMIT) {
 // anything was loaded, so the caller can redraw.
 export async function loadActiveAssignments() {
   const todo = I.filter(i => i.active && !i.assignLoaded);
+  if (!todo.length) return false;
+  await Promise.all(todo.map(async i => {
+    try {
+      const s = await getDocs(collection(db, "incidents", i.id, "assignments"));
+      i.res = s.docs.map(d => mapAssignment(d.data()));
+      i.assignLoaded = true;
+      assignCache.set(i.id, { res: i.res, updatedMs: i.updatedMs });
+    } catch (e) { console.warn("assignments read failed", i.id, e); }
+  }));
+  return true;
+}
+
+// Assignments of the given incidents (the rows on one page of Records), each read once and then cached.
+// Returns true if anything was read, so the caller can redraw.
+export async function loadAssignmentsFor(list) {
+  const todo = list.filter(i => !i.assignLoaded);
   if (!todo.length) return false;
   await Promise.all(todo.map(async i => {
     try {
@@ -297,4 +313,24 @@ export async function changeUserRole(uid, kind) {
   await updateDoc(ref, { role: ROLE_CHANGES[kind].to, updatedAt: serverTimestamp() });
   user.role = ROLE_CHANGES[kind].to;   // the screens read U, so they show the change at once
   return { ok: true };
+}
+
+// ---- Activity log ----
+// activity/{id}: one line per administrator action (review, assign, role change, new responder).
+// Written best-effort AFTER the real change succeeded, so a failure here never blocks the work.
+// Rules: only an admin can create or read; nobody can change or delete an entry.
+export async function logActivity(entry) {
+  try {
+    await setDoc(doc(collection(db, "activity")), { ...entry, createdAt: serverTimestamp() });
+    return true;
+  } catch (e) { console.warn("activity not saved", e); return false; }
+}
+// Newest 60 entries, kept up to date. Returns the unsubscribe function.
+export function listenActivity(onChange, onError) {
+  return onSnapshot(query(collection(db, "activity"), orderBy("createdAt", "desc"), limit(60)), snap => {
+    onChange(snap.docs.map(d => {
+      const x = d.data();
+      return { ms: toMs(x.createdAt) ?? Date.now(), kind: x.type, who: esc(x.actorName || "Admin"), verb: "", what: esc(x.text || ""), id: x.incidentId || "" };
+    }));
+  }, onError);
 }

@@ -241,7 +241,7 @@ private fun EmptyNotice(state: HistoryUiState, onClearFilters: () -> Unit) {
     val filtered = state.total > 0 && state.isFiltered
     Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                 Text(
                     text = if (filtered) "No incidents match these filters." else "No closed incidents yet.",
                     style = MaterialTheme.typography.bodyLarge,

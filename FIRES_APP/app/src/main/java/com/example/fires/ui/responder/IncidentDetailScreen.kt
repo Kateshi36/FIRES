@@ -364,7 +364,7 @@ private fun IncidentDetails(
             DetailRow("Pinned by", IncidentDetailRules.locationSourceLabel(incident.locationSource))
             Spacer(Modifier.height(8.dp))
             FiresMap(
-                modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)),
+                modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)),
                 center = LatLon(incident.latitude, incident.longitude),
                 zoom = 17.0,
                 // H3: while sharing, the blue dot is the responder and the line is the road route.
@@ -594,7 +594,7 @@ private fun LiveResponsePanel(
 private fun RouteBar(live: LiveRoute?) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Text(
@@ -672,7 +672,7 @@ private fun LocationNeededNotice(gate: LocationGate, location: LocationAccess) {
 private fun NoticeRow(message: String, buttonLabel: String, onButton: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Row(
@@ -730,7 +730,7 @@ private fun AssignmentRow(assignment: Assignment) {
 private fun FlaggedNotice() {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Amber.copy(alpha = 0.16f),
         border = BorderStroke(2.dp, Amber)
     ) {
@@ -778,7 +778,7 @@ private fun PhotoBox(photo: PhotoState, onRetry: () -> Unit) {
         is PhotoState.Loaded -> Image(
             bitmap = photo.bitmap.asImageBitmap(),
             contentDescription = "Photo of the fire sent by the reporter",
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
             contentScale = ContentScale.FillWidth
         )
 
@@ -800,7 +800,7 @@ private fun DuplicateRow(duplicate: Incident, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClickLabel = "Open this duplicate report", onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(if (duplicate.isSuspicious) 2.dp else 1.dp, if (duplicate.isSuspicious) Amber else Border)
     ) {
@@ -836,7 +836,7 @@ private fun DuplicateRow(duplicate: Incident, onClick: () -> Unit) {
 private fun Panel(title: String, content: @Composable ColumnScope.() -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, Border)
     ) {

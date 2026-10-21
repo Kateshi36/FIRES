@@ -1,5 +1,8 @@
 package com.example.fires.ui.auth
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.fires.R
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -131,12 +134,11 @@ fun SplashContent(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(32.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.LocalFireDepartment,
+            Image(
+                painter = painterResource(R.drawable.ic_logo_light),
                 contentDescription = null,
-                tint = Color.White,
                 modifier = Modifier
-                    .size(88.dp)
+                    .size(104.dp)
                     .graphicsLayer {
                         alpha = logoAlpha
                         scaleX = logoScale

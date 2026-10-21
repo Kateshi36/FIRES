@@ -19,6 +19,6 @@ class StatusTextTest {
         val text = (statusHeadline(IncidentStatus.DISMISSED) + statusDetail(IncidentStatus.DISMISSED)).lowercase()
         assertFalse("false" in text)
         assertFalse("fake" in text)
-        assertTrue("911" in text) // still tells them what to do if the fire is real
+        assertTrue("report it again" in text) // still tells them what to do if the fire is real
     }
 }

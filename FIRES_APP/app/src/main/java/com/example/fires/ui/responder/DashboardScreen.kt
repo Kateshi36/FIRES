@@ -1,6 +1,15 @@
 package com.example.fires.ui.responder
 
 import android.widget.Toast
+import com.example.fires.ui.theme.ThemeMenuItem
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.fires.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -189,11 +198,10 @@ fun DashboardContent(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.LocalFireDepartment,
+                Image(
+                    painter = painterResource(R.drawable.ic_logo),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Dashboard", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -214,6 +222,7 @@ fun DashboardContent(
                                 }
                             )
                         }
+                        ThemeMenuItem(onDone = { menuOpen = false })
                         DropdownMenuItem(
                             text = { Text("Sign out") },
                             onClick = {
@@ -231,16 +240,7 @@ fun DashboardContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterChip(
-                    selected = state.tab == DashboardTab.MAP,
-                    onClick = { onTab(DashboardTab.MAP) },
-                    label = { Text("Map") }
-                )
-                FilterChip(
-                    selected = state.tab == DashboardTab.LIST,
-                    onClick = { onTab(DashboardTab.LIST) },
-                    label = { Text("List") }
-                )
+                // Map, Board (the list) and History now live in the bottom bar.
                 Spacer(Modifier.weight(1f))
                 DistanceMenu(
                     selected = state.distanceFilter,
@@ -290,6 +290,31 @@ fun DashboardContent(
 
                     else -> ListView(state = state, onOpenIncident = onOpenIncident)
                 }
+            }
+
+            // ---- Bottom bar (from the approved mockup) ----
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            ) {
+                NavigationBarItem(
+                    selected = state.tab == DashboardTab.LIST,
+                    onClick = { onTab(DashboardTab.LIST) },
+                    icon = { Icon(Icons.Filled.Dashboard, contentDescription = null) },
+                    label = { Text("Board") }
+                )
+                NavigationBarItem(
+                    selected = state.tab == DashboardTab.MAP,
+                    onClick = { onTab(DashboardTab.MAP) },
+                    icon = { Icon(Icons.Filled.Map, contentDescription = null) },
+                    label = { Text("Map") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onHistory,
+                    icon = { Icon(Icons.Filled.History, contentDescription = null) },
+                    label = { Text("History") }
+                )
             }
         }
     }
@@ -446,7 +471,7 @@ private fun IncidentGroup.toMapPoint(): MapPoint {
 @Composable
 private fun Legend() {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         shadowElevation = 4.dp,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
     ) {
@@ -514,7 +539,7 @@ private fun EmptyNotice(state: DashboardUiState) {
         state.isFiltered -> "No incidents match these filters."
         else -> "No active incidents right now."
     }
-    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
