@@ -6,7 +6,7 @@ import { register } from "node:module";
 
 register("./helpers/loader.mjs", import.meta.url);
 const fake = await import("./helpers/firebase-stub.mjs");
-const { saveAssignment, newAssignmentId, I } = await import("../js/data.js");
+const { saveAssignment, removeAssignment, newAssignmentId, I } = await import("../js/data.js");
 const { mapIncident, mapAssignment } = await import("../js/mapping.js");
 
 const INC = "inc1", AID = "asg1", PATH = `incidents/${INC}/assignments/${AID}`;
@@ -126,4 +126,22 @@ test("another assignment already listed stays, and the new one is added after it
 test("with no local copy at all, the write still succeeds", async () => {
   assert.deepEqual(await saveAssignment(INC, AID, payload()), { ok: true });
   assert.equal(fake.calls.length, 1);
+});
+
+test("removeAssignment: deletes only that responder's assignment and drops them from the screen", async () => {
+  await saveAssignment(INC, "a1", payload(), local());
+  await saveAssignment(INC, "a2", payload({ responderId: "u2", responderName: "Ben" }), local());
+  const l = local(); l.res = [mapAssignment(payload()), mapAssignment(payload({ responderId: "u2", responderName: "Ben" }))];
+  fake.calls.length = 0;
+  const r = await removeAssignment(INC, "u1", l);
+  assert.deepEqual(r, { ok: true, removed: 1 });
+  assert.deepEqual(fake.calls.map(c => [c.op, c.path]), [["delete", `incidents/${INC}/assignments/a1`]]);
+  assert.deepEqual(l.res.map(x => x[0]), ["u2"]);
+});
+
+test("removeAssignment: nothing to remove deletes nothing; missing ids are blocked", async () => {
+  const r = await removeAssignment(INC, "nobody", local());
+  assert.equal(r.removed, 0);
+  assert.equal(fake.calls.filter(c => c.op === "delete").length, 0);
+  assert.deepEqual(await removeAssignment("", "u1"), { blocked: true });
 });

@@ -133,29 +133,29 @@ class AlertRulesTest {
             inc("a", severity = Severity.CRITICAL, type = FireType.ELECTRICAL, address = "Purok 3, Bagumbayan")
         )).single()
         assertEquals(AlertLevel.LOUD, event.level)
-        assertEquals("New fire report \u00B7 Critical", event.title)
-        assertEquals("Electrical fire \u00B7 Purok 3, Bagumbayan", event.text)
+        assertEquals("New fire report", event.title)
+        assertEquals("Critical \u00B7 Purok 3, Bagumbayan. Waiting for an administrator to verify.", event.text)
     }
 
     @Test fun newReport_withTrappedPeople_saysSo() {
         val event = detect(emptyList(), listOf(inc("a", trapped = true))).single()
-        assertEquals("Electrical fire \u00B7 Purok 3, Bagumbayan \u00B7 People trapped", event.text)
+        assertEquals("Medium \u00B7 Purok 3, Bagumbayan \u00B7 People trapped. Waiting for an administrator to verify.", event.text)
     }
 
     @Test fun newReport_withoutAddress_pointsToTheMap() {
         val event = detect(emptyList(), listOf(inc("a", address = "  "))).single()
-        assertEquals("Electrical fire \u00B7 Open to see the map pin", event.text)
+        assertEquals("Medium \u00B7 Open to see the map pin. Waiting for an administrator to verify.", event.text)
     }
 
-    @Test fun newReport_ofTypeOther_saysJustFire() {
+    @Test fun newReport_text_doesNotDependOnTheFireType() {
         val event = detect(emptyList(), listOf(inc("a", type = FireType.OTHER))).single()
-        assertEquals("Fire \u00B7 Purok 3, Bagumbayan", event.text)
+        assertEquals("Medium \u00B7 Purok 3, Bagumbayan. Waiting for an administrator to verify.", event.text)
     }
 
     @Test fun newDuplicate_isWordedAsDuplicate_butStillLoud() {
         val event = detect(emptyList(), listOf(inc("a", duplicate = true, severity = Severity.HIGH))).single()
         assertEquals(AlertLevel.LOUD, event.level)
-        assertEquals("Possible duplicate report \u00B7 High", event.title)
+        assertEquals("Possible duplicate report", event.title)
     }
 
     // ---------- F1.2 Wording: status change ----------
@@ -166,6 +166,12 @@ class AlertRulesTest {
         return detect(before, after).single()
     }
 
+    @Test fun verified_saysTheResponseCanStart() {
+        val event = statusEvent(IncidentStatus.VERIFIED)
+        assertEquals("Report verified", event.title)
+        assertEquals("INC-A was verified. You can start your response.", event.text)
+    }
+
     @Test fun statusChange_isQuiet_andShowsOnlyTheAddress() {
         val event = statusEvent(IncidentStatus.DISPATCHED)
         assertEquals(AlertLevel.QUIET, event.level)
@@ -174,12 +180,12 @@ class AlertRulesTest {
     }
 
     @Test fun statusTitles_matchTheNewStatus() {
-        assertEquals("Incident verified", statusEvent(IncidentStatus.VERIFIED).title)
+        assertEquals("Report verified", statusEvent(IncidentStatus.VERIFIED).title)
         assertEquals("Incident dispatched", statusEvent(IncidentStatus.DISPATCHED).title)
         assertEquals("Responders on scene", statusEvent(IncidentStatus.ON_SCENE).title)
     }
 
     @Test fun statusChange_withoutAddress_pointsToTheMap() {
-        assertEquals("Open to see the map pin", statusEvent(IncidentStatus.VERIFIED, address = "").text)
+        assertEquals("Open to see the map pin", statusEvent(IncidentStatus.DISPATCHED, address = "").text)
     }
 }

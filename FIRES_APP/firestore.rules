@@ -89,6 +89,18 @@ service cloud.firestore {
 
     match /users/{uid} {
 
+      // "You were assigned" notices for one responder. Only an admin writes them (website, after
+      // assigning); only the owner reads them; nobody edits or deletes.
+      match /notifications/{noteId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if isAdmin()
+          && request.resource.data.keys().hasOnly(['type', 'incidentId', 'text', 'createdAt'])
+          && request.resource.data.type in ['assigned', 'removed']
+          && request.resource.data.incidentId is string
+          && request.resource.data.text is string && request.resource.data.text.size() <= 200
+          && request.resource.data.createdAt == request.time;
+      }
+
       allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
 
@@ -196,7 +208,9 @@ service cloud.firestore {
         && request.resource.data.reporterId == request.auth.uid
         && validNewIncident(request.resource.data);
 
-      // Responders change status, verification and severity, and nothing else. A citizen has no
+      // Staff change status and severity, and nothing else. Only an ADMIN can verify a report, mark
+      // it false or duplicate (verification), or dismiss it: a responder can only move a report
+      // that an administrator already verified (dispatched, on scene, resolved). A citizen has no
       // update rule at all, so a report cannot be changed after it is sent.
       allow update: if isStaff()
         && changesOnly(['status', 'verification', 'severity', 'severitySource', 'updatedAt'])
@@ -204,7 +218,11 @@ service cloud.firestore {
         && validStatus(request.resource.data.status)
         && validVerification(request.resource.data.verification)
         && validSeverity(request.resource.data.severity)
-        && request.resource.data.severitySource in ['auto', 'responder'];
+        && request.resource.data.severitySource in ['auto', 'responder']
+        && (isAdmin()
+            || (request.resource.data.verification == resource.data.verification
+                && resource.data.verification == 'verified'
+                && request.resource.data.status != 'dismissed'));
 
       // No deletes from the app.
 
@@ -282,8 +300,8 @@ service cloud.firestore {
           && resource.data.responderId == request.auth.uid
           && validOwnAssignment(request.resource.data);
 
-        // No deletes yet. If the team needs to remove a wrong assignment from the website, add:
-        //   allow delete: if isAdmin();
+        // Only an administrator (website) can take a responder off an incident again.
+        allow delete: if isAdmin();
       }
 
       // -------------------------------------------------------------------
@@ -414,7 +432,7 @@ service cloud.firestore {
     match /activity/{entryId} {
       function validActivity(d) {
         return d.keys().hasOnly(['type', 'text', 'actorId', 'actorName', 'incidentId', 'createdAt'])
-          && d.type in ['verify', 'false', 'duplicate', 'assign', 'role', 'create']
+          && d.type in ['verify', 'false', 'duplicate', 'assign', 'unassign', 'role', 'create']
           && isText(d.text, 200)
           && d.actorId == request.auth.uid
           && isText(d.actorName, 80)

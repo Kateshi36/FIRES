@@ -8,7 +8,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.fires.data.model.DeliveryState
 import com.example.fires.data.model.IncidentDelivery
 import com.example.fires.data.model.Severity
+import com.example.fires.data.model.fireTypeEnum
 import com.example.fires.data.model.severityEnum
+import com.example.fires.util.incidentCode
 import com.example.fires.data.repository.IncidentRepository
 import com.example.fires.ui.common.LatLon
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,7 +27,13 @@ data class AlertSentUiState(
     val location: LatLon? = null,
     val severity: Severity? = null,
     /** Another unresolved report was already sent from about the same place. */
-    val isDuplicate: Boolean = false
+    val isDuplicate: Boolean = false,
+    /** "INC-1A2B3C" and "House fire": the chip under the title. Empty until the report is known. */
+    val code: String = "",
+    val fireTypeLabel: String = "",
+    /** When the server stamped the report; null while it is only saved on the phone. */
+    val sentAtMillis: Long? = null,
+    val hasPhoto: Boolean = false
 )
 
 /**
@@ -61,5 +69,9 @@ private fun IncidentDelivery.toUiState() = AlertSentUiState(
     delivery = state,
     location = incident?.let { LatLon(it.latitude, it.longitude) },
     severity = incident?.severityEnum(),
-    isDuplicate = incident?.isDuplicate == true
+    isDuplicate = incident?.isDuplicate == true,
+    code = incident?.let { incidentCode(it.id) }.orEmpty(),
+    fireTypeLabel = incident?.fireTypeEnum()?.label.orEmpty(),
+    sentAtMillis = incident?.submittedAt?.toDate()?.time,
+    hasPhoto = incident?.hasPhoto == true
 )

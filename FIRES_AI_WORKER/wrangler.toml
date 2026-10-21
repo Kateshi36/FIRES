@@ -1,0 +1,13 @@
+# Cloudflare Worker settings for the F.I.R.E.S. AI helper.
+name = "fires-ai"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "fires-a81c0"
+# Pages that may call the Worker (comma separated, no trailing slash).
+ALLOWED_ORIGINS = "https://fires-a81c0.web.app,https://fires-a81c0.firebaseapp.com"
+# Pick a current model that is NOT marked "preview" from Google AI Studio, then write it in the paper.
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+
+# The key is a SECRET, never written here:  npx wrangler secret put GEMINI_API_KEY

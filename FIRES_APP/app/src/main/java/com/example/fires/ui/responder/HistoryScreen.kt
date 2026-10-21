@@ -79,6 +79,7 @@ import java.time.LocalDate
 fun HistoryScreen(
     onBack: () -> Unit,
     onOpenIncident: (String) -> Unit,
+    bottomBar: @Composable () -> Unit = {},
     viewModel: HistoryViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -89,7 +90,8 @@ fun HistoryScreen(
         onDateRange = viewModel::setDateRange,
         onClearFilters = viewModel::clearFilters,
         onRetry = viewModel::retry,
-        onOpenIncident = onOpenIncident
+        onOpenIncident = onOpenIncident,
+        bottomBar = bottomBar
     )
 }
 
@@ -102,7 +104,8 @@ fun HistoryContent(
     onDateRange: (DateRange) -> Unit,
     onClearFilters: () -> Unit,
     onRetry: () -> Unit,
-    onOpenIncident: (String) -> Unit
+    onOpenIncident: (String) -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
@@ -170,6 +173,7 @@ fun HistoryContent(
                     }
                 }
             }
+            bottomBar()
         }
     }
 }

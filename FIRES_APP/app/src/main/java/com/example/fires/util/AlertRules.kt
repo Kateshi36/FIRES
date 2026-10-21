@@ -1,9 +1,7 @@
 package com.example.fires.util
 
-import com.example.fires.data.model.FireType
 import com.example.fires.data.model.Incident
 import com.example.fires.data.model.IncidentStatus
-import com.example.fires.data.model.fireTypeEnum
 import com.example.fires.data.model.severityEnum
 import com.example.fires.data.model.statusEnum
 import com.google.firebase.Timestamp
@@ -44,6 +42,8 @@ object AlertRules {
     const val MAX_AGE_MS = 30 * 60 * 1000L
 
     private const val SEP = " \u00B7 " // " · "
+
+    const val WAITING_TEXT = "Waiting for an administrator to verify."
 
     /**
      * Compares the previous active-incident list with the new one.
@@ -97,14 +97,12 @@ object AlertRules {
      */
     private fun newIncidentAlert(incident: Incident): AlertEvent {
         val severity = incident.severityEnum().label
-        val title = if (incident.isDuplicate) {
-            "Possible duplicate report$SEP$severity"
-        } else {
-            "New fire report$SEP$severity"
-        }
+        val title = if (incident.isDuplicate) "Possible duplicate report" else "New fire report"
+        // Round 2 wording: "Medium · address", then what happens next. Only an administrator verifies.
         val details = buildString {
-            append(fireTypeText(incident)).append(SEP).append(addressText(incident))
+            append(severity).append(SEP).append(addressText(incident))
             if (incident.trapped) append(SEP).append("People trapped")
+            append(". ").append(WAITING_TEXT)
         }
         return AlertEvent(incident.id, AlertKind.NEW_INCIDENT, AlertLevel.LOUD, title, details)
     }
@@ -113,21 +111,19 @@ object AlertRules {
     private fun statusChangeAlert(incident: Incident): AlertEvent {
         val title = when (incident.statusEnum()) {
             IncidentStatus.REPORTED -> "Incident back to reported"
-            IncidentStatus.VERIFIED -> "Incident verified"
+            IncidentStatus.VERIFIED -> "Report verified"
             IncidentStatus.DISPATCHED -> "Incident dispatched"
             IncidentStatus.ON_SCENE -> "Responders on scene"
             // Closed incidents leave the active list, so these are not expected here.
             IncidentStatus.RESOLVED, IncidentStatus.DISMISSED ->
                 "Incident ${incident.statusEnum().label.lowercase()}"
         }
-        return AlertEvent(
-            incident.id, AlertKind.STATUS_CHANGED, AlertLevel.QUIET, title, addressText(incident)
-        )
-    }
-
-    private fun fireTypeText(incident: Incident): String {
-        val type = incident.fireTypeEnum()
-        return if (type == FireType.OTHER) "Fire" else type.label
+        val text = if (incident.statusEnum() == IncidentStatus.VERIFIED) {
+            "${incidentCode(incident.id)} was verified. You can start your response."
+        } else {
+            addressText(incident)
+        }
+        return AlertEvent(incident.id, AlertKind.STATUS_CHANGED, AlertLevel.QUIET, title, text)
     }
 
     private fun addressText(incident: Incident): String =

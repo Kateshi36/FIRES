@@ -48,4 +48,33 @@ class ResolveRulesTest {
         assertNull(IncidentActionRules.nextStatus(IncidentStatus.ON_SCENE))
         assertTrue(ResolveRules.canResolve(IncidentStatus.ON_SCENE))
     }
+
+    // ---------- Round 2: quick notes and duration ----------
+
+    @Test fun addNote_startsAndAppendsLines() {
+        val one = ResolveRules.addNote("", "Fire put out")
+        assertEquals("Fire put out.", one)
+        assertEquals("Fire put out.\nNobody hurt.", ResolveRules.addNote(one, "Nobody hurt"))
+    }
+
+    @Test fun addNote_ignoresADuplicateAndAnOverflow() {
+        val one = ResolveRules.addNote("", "Fire put out")
+        assertEquals(one, ResolveRules.addNote(one, "Fire put out"))
+        val long = "x".repeat(ResolveRules.MAX_REMARKS - 3)
+        assertEquals(long, ResolveRules.addNote(long, "Nobody hurt"))
+    }
+
+    @Test fun hasNote_followsTheText() {
+        val text = ResolveRules.addNote("Arrived 3:40 PM.", "Nobody hurt")
+        assertTrue(ResolveRules.hasNote(text, "Nobody hurt"))
+        assertFalse(ResolveRules.hasNote(text, "Fire put out"))
+    }
+
+    @Test fun duration_isReadable_andNeverNegative() {
+        val min = 60_000L
+        assertEquals("0 min", ResolveRules.durationLabel(10 * min, 5 * min))
+        assertEquals("45 min", ResolveRules.durationLabel(0, 45 * min))
+        assertEquals("1 h 12 min", ResolveRules.durationLabel(0, 72 * min))
+        assertEquals("2 h", ResolveRules.durationLabel(0, 120 * min))
+    }
 }

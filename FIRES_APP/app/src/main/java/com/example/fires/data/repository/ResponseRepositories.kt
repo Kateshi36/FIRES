@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.tasks.await
 
 /** Who/what is assigned to an incident: incidents/{incidentId}/assignments */
 class AssignmentRepository(private val db: FirebaseFirestore = FirebaseFirestore.getInstance()) {
@@ -23,6 +24,10 @@ class AssignmentRepository(private val db: FirebaseFirestore = FirebaseFirestore
 
     fun assign(incidentId: String, assignment: Assignment): Task<DocumentReference> =
         col(incidentId).add(assignment)
+
+    /** True when [uid] is one of the responders assigned to this incident. One equality filter: no index needed. */
+    suspend fun isAssigned(incidentId: String, uid: String): Boolean =
+        !col(incidentId).whereEqualTo("responderId", uid).limit(1).get().await().isEmpty
 
     /** A new assignment id, made up front so a retry can write the same document again. */
     fun newId(incidentId: String): String = col(incidentId).document().id

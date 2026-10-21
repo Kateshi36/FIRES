@@ -222,14 +222,6 @@ class IncidentDetailViewModel(
     // Each one checks the LIVE report first, so a stale tap (another responder already acted on it)
     // does nothing instead of overwriting their change.
 
-    /** Verify, mark false, or mark duplicate. Only while the report is still REPORTED. */
-    fun review(verification: Verification) {
-        val incident = state.value.incident ?: return
-        if (verification == Verification.PENDING) return
-        if (!IncidentActionRules.canReview(incident.statusEnum())) return
-        write { incidents.setVerification(incidentId, verification) }
-    }
-
     fun setSeverity(severity: Severity) {
         val incident = state.value.incident ?: return
         if (!IncidentActionRules.canOverrideSeverity(incident.statusEnum())) return

@@ -1,7 +1,6 @@
 package com.example.fires.util
 
 import com.example.fires.data.model.IncidentStatus
-import com.example.fires.data.model.Verification
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -10,16 +9,17 @@ import org.junit.Test
 
 class IncidentActionRulesTest {
 
-    @Test fun review_is_only_offered_on_a_reported_report() {
-        assertTrue(IncidentActionRules.canReview(IncidentStatus.REPORTED))
+    @Test fun a_reported_report_waits_for_the_administrator() {
+        assertTrue(IncidentActionRules.awaitsAdminVerification(IncidentStatus.REPORTED))
         IncidentStatus.entries.filter { it != IncidentStatus.REPORTED }.forEach {
-            assertFalse("$it", IncidentActionRules.canReview(it))
+            assertFalse("$it", IncidentActionRules.awaitsAdminVerification(it))
         }
+        assertTrue(IncidentActionRules.ADMIN_VERIFIES_NOTE.contains("administrator"))
     }
 
     @Test fun severity_and_assign_are_only_for_open_reports() {
         IncidentStatus.entries.forEach {
-            assertEquals("$it", it.isActive, IncidentActionRules.canOverrideSeverity(it))
+            assertEquals("$it", it.isActive && it != IncidentStatus.REPORTED, IncidentActionRules.canOverrideSeverity(it))
             assertEquals("$it", it.isActive, IncidentActionRules.canAssign(it))
         }
     }
@@ -42,19 +42,5 @@ class IncidentActionRulesTest {
         assertNull(IncidentActionRules.previousStatus(IncidentStatus.VERIFIED))
         assertNull(IncidentActionRules.previousStatus(IncidentStatus.REPORTED))
         assertNull(IncidentActionRules.previousStatus(IncidentStatus.RESOLVED))
-    }
-
-    @Test fun only_false_and_duplicate_ask_for_confirmation() {
-        assertTrue(IncidentActionRules.needsConfirmation(Verification.FALSE))
-        assertTrue(IncidentActionRules.needsConfirmation(Verification.DUPLICATE))
-        assertFalse(IncidentActionRules.needsConfirmation(Verification.VERIFIED))
-        assertFalse(IncidentActionRules.needsConfirmation(Verification.PENDING))
-    }
-
-    @Test fun confirm_texts_say_what_will_happen() {
-        assertEquals("Mark as false report?", IncidentActionRules.confirmTitle(Verification.FALSE))
-        assertEquals("Mark as duplicate?", IncidentActionRules.confirmTitle(Verification.DUPLICATE))
-        assertTrue(IncidentActionRules.confirmBody(Verification.FALSE).contains("leave the dashboard"))
-        assertEquals("Mark as false", IncidentActionRules.confirmButton(Verification.FALSE))
     }
 }

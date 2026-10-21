@@ -29,7 +29,7 @@ export {
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 export {
   doc, getDoc, getDocs, collection, query, where, orderBy, limit, onSnapshot,
-  getCountFromServer, setDoc, updateDoc, runTransaction, serverTimestamp, Timestamp
+  getCountFromServer, setDoc, updateDoc, deleteDoc, runTransaction, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 export { initializeApp };

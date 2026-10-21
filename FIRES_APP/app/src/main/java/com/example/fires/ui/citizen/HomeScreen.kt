@@ -86,8 +86,8 @@ import com.example.fires.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     onSosClick: () -> Unit,
-    onMyReportsClick: () -> Unit,
     onSignOut: () -> Unit,
+    bottomBar: @Composable () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -105,8 +105,8 @@ fun HomeScreen(
         location = location,
         onRecenter = { viewModel.refreshLocation(context) },
         onSosClick = onSosClick,
-        onMyReportsClick = onMyReportsClick,
-        onSignOut = onSignOut
+        onSignOut = onSignOut,
+        bottomBar = bottomBar
     )
 }
 
@@ -117,8 +117,8 @@ fun HomeContent(
     location: LocationAccess,
     onRecenter: () -> Unit,
     onSosClick: () -> Unit,
-    onMyReportsClick: () -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    bottomBar: @Composable () -> Unit = {}
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var confirmSignOut by remember { mutableStateOf(false) }
@@ -147,13 +147,6 @@ fun HomeContent(
                         Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text("My reports") },
-                            onClick = {
-                                menuOpen = false
-                                onMyReportsClick()
-                            }
-                        )
                         ThemeMenuItem(onDone = { menuOpen = false })
                         DropdownMenuItem(
                             text = { Text("Sign out") },
@@ -242,8 +235,8 @@ fun HomeContent(
                 )
             }
 
-            // ---- Bottom bar (from the approved mockup) ----
-            HomeBottomBar(onMyReports = onMyReportsClick)
+            // ---- Bottom bar: Home, My reports, Chat, Profile (round 2) ----
+            bottomBar()
         }
     }
 
@@ -296,28 +289,6 @@ private fun SosButton(onClick: () -> Unit) {
     }
 }
 
-/** Home and My reports. The three-dot menu at the top keeps dark mode and sign out. */
-@Composable
-private fun HomeBottomBar(onMyReports: () -> Unit) {
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        windowInsets = WindowInsets(0, 0, 0, 0)
-    ) {
-        NavigationBarItem(
-            selected = true,
-            onClick = {},
-            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-            label = { Text("Home") }
-        )
-        NavigationBarItem(
-            selected = false,
-            onClick = onMyReports,
-            icon = { Icon(Icons.Filled.Description, contentDescription = null) },
-            label = { Text("My reports") }
-        )
-    }
-}
-
 // ---------- Previews ----------
 
 private val previewPosition = LatLon(14.5995, 120.9842)
@@ -327,7 +298,7 @@ private fun ready() = LocationAccess(LocationGate.Ready, {}, {}, {}, {})
 @Composable
 private fun HomeReadyPreview() {
     FIRESTheme {
-        HomeContent(HomeUiState(position = previewPosition), ready(), {}, {}, {}, {})
+        HomeContent(HomeUiState(position = previewPosition), ready(), {}, {}, {})
     }
 }
 
@@ -335,7 +306,7 @@ private fun HomeReadyPreview() {
 @Composable
 private fun HomeLocatingPreview() {
     FIRESTheme {
-        HomeContent(HomeUiState(isLocating = true), ready(), {}, {}, {}, {})
+        HomeContent(HomeUiState(isLocating = true), ready(), {}, {}, {})
     }
 }
 
@@ -343,7 +314,7 @@ private fun HomeLocatingPreview() {
 @Composable
 private fun HomeGpsOffPreview() {
     FIRESTheme {
-        HomeContent(HomeUiState(), LocationAccess(LocationGate.GpsOff, {}, {}, {}, {}), {}, {}, {}, {})
+        HomeContent(HomeUiState(), LocationAccess(LocationGate.GpsOff, {}, {}, {}, {}), {}, {}, {})
     }
 }
 
@@ -354,7 +325,7 @@ private fun HomeDeniedPreview() {
         HomeContent(
             HomeUiState(),
             LocationAccess(LocationGate.PermissionDenied(canAskAgain = false), {}, {}, {}, {}),
-            {}, {}, {}, {}
+            {}, {}, {}
         )
     }
 }

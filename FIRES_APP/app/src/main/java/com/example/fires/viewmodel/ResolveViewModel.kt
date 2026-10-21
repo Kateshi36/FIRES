@@ -5,9 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.fires.data.model.Assignment
 import com.example.fires.data.model.Incident
 import com.example.fires.data.model.IncidentRecord
 import com.example.fires.data.model.statusEnum
+import com.example.fires.data.repository.AssignmentRepository
 import com.example.fires.data.repository.AuthRepository
 import com.example.fires.data.repository.IncidentRepository
 import com.example.fires.data.repository.RecordRepository
@@ -34,6 +36,8 @@ data class ResolveUiState(
     /** The report being resolved. Null while loading, and when it does not exist. */
     val incident: Incident? = null,
     val isLoading: Boolean = true,
+    /** Who was assigned, for the summary card. Empty if none or still loading. */
+    val assignments: List<Assignment> = emptyList(),
     val remarks: String = "",
     val remarksError: String? = null,
     val isSaving: Boolean = false,
@@ -61,7 +65,8 @@ class ResolveViewModel(
     private val incidentId: String,
     incidents: IncidentRepository = IncidentRepository(),
     private val records: RecordRepository = RecordRepository(),
-    private val auth: AuthRepository = AuthRepository()
+    private val auth: AuthRepository = AuthRepository(),
+    assignmentRepo: AssignmentRepository = AssignmentRepository()
 ) : ViewModel() {
 
     private data class Form(
@@ -88,10 +93,18 @@ class ResolveViewModel(
             emit(Snapshot(null, loading = false))
         }
 
-    val state: StateFlow<ResolveUiState> = combine(incident, form) { snapshot, f ->
+    private val assigned: Flow<List<Assignment>> = assignmentRepo.observe(incidentId)
+        .catch { e ->
+            Log.w(TAG, "Assignment listener stopped", e)
+            emit(emptyList())
+        }
+        .onStart { emit(emptyList()) }
+
+    val state: StateFlow<ResolveUiState> = combine(incident, form, assigned) { snapshot, f, people ->
         ResolveUiState(
             incident = snapshot.incident,
             isLoading = snapshot.loading,
+            assignments = people,
             remarks = f.remarks,
             remarksError = f.remarksError,
             isSaving = f.isSaving,
@@ -103,6 +116,11 @@ class ResolveViewModel(
     // Frozen while a save is running, so what was sent is what was typed.
     fun onRemarksChange(value: String) = form.update {
         if (it.isSaving) it else it.copy(remarks = value, remarksError = null, error = null)
+    }
+
+    /** A "What happened?" chip: adds its line to the remarks. */
+    fun addNote(note: String) = form.update {
+        if (it.isSaving) it else it.copy(remarks = ResolveRules.addNote(it.remarks, note), remarksError = null, error = null)
     }
 
     fun onResolveClick() {

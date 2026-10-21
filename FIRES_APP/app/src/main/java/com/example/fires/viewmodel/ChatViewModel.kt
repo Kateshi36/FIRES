@@ -41,7 +41,9 @@ data class ChatUiState(
      * The report this thread belongs to, shown at the top so the person knows which fire they are
      * talking about. Null until it loads, or if it cannot be read: the chat works without it.
      */
-    val incident: Incident? = null
+    val incident: Incident? = null,
+    /** The person using this phone sent the report: they get the quick replies, and the other side is "Responders". */
+    val isReporter: Boolean = false
 )
 
 /**
@@ -95,10 +97,12 @@ class ChatViewModel(
     }
 
     val state: StateFlow<ChatUiState> = combine(feed, _sendError, incident) { current, sendError, report ->
+        val reporter = report != null && report.reporterId.isNotEmpty() && report.reporterId == auth.currentUid
         when (current) {
-            Feed.Loading -> ChatUiState(sendError = sendError, incident = report)
+            Feed.Loading -> ChatUiState(sendError = sendError, incident = report, isReporter = reporter)
             Feed.Failed -> ChatUiState(
-                isLoading = false, loadError = LOAD_ERROR, sendError = sendError, incident = report
+                isLoading = false, loadError = LOAD_ERROR, sendError = sendError, incident = report,
+                isReporter = reporter
             )
             is Feed.Loaded -> {
                 val now = System.currentTimeMillis()
@@ -107,7 +111,8 @@ class ChatViewModel(
                     items = current.list.map { it.toItem(me, now) },
                     isLoading = false,
                     sendError = sendError,
-                    incident = report
+                    incident = report,
+                    isReporter = reporter
                 )
             }
         }

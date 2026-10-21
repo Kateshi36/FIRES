@@ -39,7 +39,7 @@ test("the only status strings the website can write are verified and dismissed",
 
 test("no chat: the website never writes or even reads the messages collection for sending", () => {
   assert.equal(/<textarea|type=["']?text["']?[^>]*(message|chat)/i.test(all), false);
-  assert.equal(/addDoc|deleteDoc|writeBatch/.test(all.replace(/import[^;]*;/g, "")), false);   // no other kind of write exists
+  assert.equal(/addDoc|writeBatch/.test(all.replace(/import[^;]*;/g, "")), false);   // no other kind of write exists
   const writes = [...code["js/data.js"].matchAll(/\b(setDoc|updateDoc)\(\s*(?:ref|doc\(db,\s*("[^"]+"))/g)].map(m => m[1]);
   assert.equal(writes.length, 3);                                   // assignment, new user profile, role change (the activity log line is checked below)
   assert.equal(/"messages"[^)]*\)\s*,\s*\{/.test(code["js/data.js"].replace(/getDocs\([^)]*\)/g, "")), false);
@@ -47,13 +47,13 @@ test("no chat: the website never writes or even reads the messages collection fo
 
 test("every write call is one of the five known ones", () => {
   const calls = [...all.matchAll(/\b(tx\.update|tx\.set|tx\.delete|setDoc|updateDoc)\(/g)].map(m => m[1]).sort();
-  assert.deepEqual(calls, ["setDoc", "setDoc", "setDoc", "tx.update", "updateDoc"]);   // assignment, profile, activity log line, verify, role
+  assert.deepEqual(calls, ["setDoc", "setDoc", "setDoc", "setDoc", "tx.update", "updateDoc"]);   // assignment, profile, activity log line, verify, role
 });
 
 test("the activity log is the only new collection written, and only through logActivity", () => {
   const d = code["js/data.js"];
   assert.equal((d.match(/doc\(collection\(db, "activity"\)\)/g) || []).length, 1);
-  assert.equal(/setDoc\(doc\(collection\(db, "(?!activity)/.test(d), false);
+  assert.equal(/setDoc\(doc\(collection\(db, "(?!activity|users", responderId, "notifications)/.test(d), false);   // the only other new write: the "assigned" notification
 });
 
 test("the verify write has exactly three fields for each of the three actions, through the real code", async () => {
@@ -67,4 +67,10 @@ test("the verify write has exactly three fields for each of the three actions, t
     assert.deepEqual(fake.calls[0].data, { verification: v, status: s, updatedAt: { __serverTimestamp: true } }, kind);
     assert.equal("severity" in fake.calls[0].data, false, kind);
   }
+});
+
+test("the only delete on the website is removeAssignment, under incidents/*/assignments", () => {
+  const d = code["js/data.js"];
+  assert.equal((d.match(/\bdeleteDoc\(/g) || []).length, 1);
+  assert.match(d, /deleteDoc\(doc\(db, "incidents", incidentId, "assignments", d\.id\)\)/);
 });

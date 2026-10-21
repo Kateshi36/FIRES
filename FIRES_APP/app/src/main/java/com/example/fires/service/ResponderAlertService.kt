@@ -15,6 +15,11 @@ import com.example.fires.MainActivity
 import com.example.fires.R
 import com.example.fires.data.repository.AuthRepository
 import com.example.fires.data.repository.IncidentRepository
+import com.example.fires.data.repository.NoticeRepository
+import com.example.fires.util.AlertEvent
+import com.example.fires.util.AlertKind
+import com.example.fires.util.AlertLevel
+import com.example.fires.util.AssignedNoticeRules
 import com.example.fires.util.AlertChannels
 import com.example.fires.util.AlertTracker
 import com.example.fires.util.attempt
@@ -37,6 +42,8 @@ class ResponderAlertService : Service() {
     // Cancelled in onDestroy, which also removes the Firestore listener.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var listenJob: Job? = null
+    private var noticeJob: Job? = null
+    private val shownNotices = mutableSetOf<String>()
     private val tracker = AlertTracker()
     private val notifier by lazy { AlertNotifier(this) }
 
@@ -75,7 +82,38 @@ class ResponderAlertService : Service() {
         return START_STICKY
     }
 
+    /**
+     * "You've been assigned": the website writes a notice under users/{me}/notifications after an
+     * administrator assigns this responder (no push server on the free plan, so the phone listens).
+     */
+    private fun startNoticeListening() {
+        if (noticeJob?.isActive == true) return
+        val uid = AuthRepository().currentUid ?: return
+        noticeJob = scope.launch {
+            attempt {
+                NoticeRepository().observeAssigned(uid).collect { n ->
+                    val now = System.currentTimeMillis()
+                    if (AssignedNoticeRules.shouldAlert(n.createdAtMs, now, n.id in shownNotices)) {
+                        shownNotices += n.id
+                        notifier.post(
+                            listOf(
+                                AlertEvent(
+                                    incidentId = n.incidentId,
+                                    kind = AlertKind.NEW_INCIDENT,
+                                    level = AlertLevel.LOUD,
+                                    title = AssignedNoticeRules.title(n.removed),
+                                    text = AssignedNoticeRules.text(n.text, n.removed)
+                                )
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     private fun startListening() {
+        startNoticeListening()
         if (listenJob?.isActive == true) return // already listening: a second start changes nothing
 
         tracker.reset()

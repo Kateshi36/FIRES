@@ -59,7 +59,7 @@ async function fresh() {
   return { page, errors, ctx };
 }
 // The writes to incidents / assignments / users. The activity log line each of them leaves behind is checked separately.
-const calls = page => page.evaluate(() => window.__fake.calls.filter(c => !String(c.path).startsWith("activity/")));
+const calls = page => page.evaluate(() => window.__fake.calls.filter(c => !String(c.path).startsWith("activity/") && !/^users\/[^/]+\/notifications\//.test(String(c.path))));
 const logLines = page => page.evaluate(() => window.__fake.calls.filter(c => String(c.path).startsWith("activity/")));
 const openFromRecords = async (page, id) => {
   await page.click('aside button[data-t="rec"]');

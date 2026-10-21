@@ -35,6 +35,7 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--tint)}
 .muted{color:var(--mute)}
 .drawer{position:fixed;top:0;right:0;height:100%;width:min(400px,100%);background:var(--card);border-left:1px solid var(--line);padding:24px;overflow:auto;transform:translateX(105%);transition:transform .2s;z-index:5;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
 .drawer.open{transform:none}.drawer h2{margin:0 0 4px;font-size:18px}
+.arow{margin:4px 0}.rmasg{background:none;border:0;cursor:pointer;color:var(--red);font:inherit;font-size:13px;margin-left:8px;padding:0}.rmasg:hover{text-decoration:underline}
 .kv{margin:14px 0}.kv small{display:block;color:var(--mute);font-size:12px}
 .msg{background:var(--bg);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:4}.scrim.open{display:block}

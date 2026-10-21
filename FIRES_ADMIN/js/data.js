@@ -4,7 +4,7 @@
 import {
   firebaseConfig, initializeApp, initializeAuth, inMemoryPersistence,
   auth, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail,
-  setDoc, updateDoc, runTransaction, serverTimestamp,
+  setDoc, updateDoc, deleteDoc, runTransaction, serverTimestamp,
   db, doc, getDoc, getDocs, collection, query, where, orderBy, limit, onSnapshot, Timestamp
 } from "./firebase.js";
 import { randomPassword } from "./validators.js";
@@ -324,6 +324,31 @@ export async function logActivity(entry) {
     await setDoc(doc(collection(db, "activity")), { ...entry, createdAt: serverTimestamp() });
     return true;
   } catch (e) { console.warn("activity not saved", e); return false; }
+}
+// users/{responderUid}/notifications/{id}: "you were assigned" for ONE responder. The phone listens to its own
+// subcollection and shows a notification (no push server on the free plan). Best-effort, AFTER the assignment
+// is saved. Rules: only an admin can create; only the owner can read; nobody can change or delete.
+export async function notifyAssigned(responderId, incidentId, text, type = "assigned") {
+  if (!responderId || !incidentId) return false;
+  try {
+    await setDoc(doc(collection(db, "users", responderId, "notifications")),
+      { type: type === "removed" ? "removed" : "assigned", incidentId, text: String(text || "").slice(0, 200), createdAt: serverTimestamp() });
+    return true;
+  } catch (e) { console.warn("responder not notified", e); return false; }
+}
+// Takes ONE responder off ONE incident (admin only; rules: assignments delete = isAdmin). The assignment
+// documents are found by responderId, deleted, and the same person is dropped from the screen's copy and
+// the cache, so every screen agrees without a re-read. Returns { ok: true, removed: n }.
+export async function removeAssignment(incidentId, responderId, local = I.find(i => i.id === incidentId)) {
+  if (!incidentId || !responderId) return { blocked: true };
+  const snap = await getDocs(query(collection(db, "incidents", incidentId, "assignments"), where("responderId", "==", responderId)));
+  const mine = snap.docs.filter(d => d.data().responderId === responderId);
+  for (const d of mine) await deleteDoc(doc(db, "incidents", incidentId, "assignments", d.id));
+  const drop = list => { if (list && Array.isArray(list.res)) list.res = list.res.filter(r => r[0] !== responderId); };
+  drop(local);
+  const cached = assignCache.get(incidentId);
+  if (cached) drop(cached);
+  return { ok: true, removed: mine.length };
 }
 // Newest 60 entries, kept up to date. Returns the unsubscribe function.
 export function listenActivity(onChange, onError) {

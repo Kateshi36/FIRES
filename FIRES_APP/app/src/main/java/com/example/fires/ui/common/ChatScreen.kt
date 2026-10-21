@@ -1,6 +1,17 @@
 package com.example.fires.ui.common
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import com.example.fires.util.ProfileRules
+import com.example.fires.util.incidentCode
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,8 +68,8 @@ import com.example.fires.viewmodel.ChatUiState
 import com.example.fires.viewmodel.ChatViewModel
 
 /**
- * Chat for one report (D8). Shared by citizens and responders. The list is live: a reply from the
- * other side appears without refreshing.
+ * Chat for one report (D8, round 2 design). Shared by citizens and responders. The list is live: a
+ * reply from the other side appears without refreshing.
  */
 @Composable
 fun ChatScreen(
@@ -88,22 +99,35 @@ fun ChatContent(
     onRetry: () -> Unit,
     onBack: () -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+    val incident = state.incident
+    // The other side: "Responders" until one of them writes (reporter's view), the reporter for a responder.
+    val otherName = ChatRules.otherParty(
+        state.items,
+        if (state.isReporter || incident == null) ChatRules.RESPONDERS_NAME
+        else incident.reporterName.ifBlank { ChatRules.REPORTER_FALLBACK_NAME }
+    )
+    val sub = incident?.let {
+        incidentCode(it.id) + if (it.addressText.isNotBlank()) " \u00B7 " + it.addressText else ""
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         // imePadding lifts the message box above the keyboard.
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(end = 16.dp, top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                Text("Chat", style = MaterialTheme.typography.headlineSmall)
-            }
+            RoundHeader(
+                title = otherName,
+                sub = sub,
+                onBack = onBack,
+                trailing = { Avatar(ProfileRules.initials(otherName)) }
+            )
 
-            // Which fire this thread is about. Hidden until the report has loaded.
-            state.incident?.let { IncidentHeader(it) }
+            ToneBanner(
+                text = if (state.isReporter) "Only you and the responders on this report can read this chat."
+                else "Only the responders and the reporter of this report can read this chat.",
+                tone = Tone.BLUE,
+                icon = Icons.Filled.Lock,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+            )
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -130,45 +154,63 @@ fun ChatContent(
                 ErrorBanner(it, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
             }
 
+            // One-tap texts for the person who reported the fire. They go into the box, so nothing
+            // is sent by a slip of the thumb.
+            if (state.isReporter) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ChatRules.QUICK_REPLIES.forEach { text ->
+                        QuickReplyChip(text = text, onClick = { onDraftChange(text) })
+                    }
+                }
+            }
+
             MessageInput(draft = draft, onDraftChange = onDraftChange, onSend = onSend)
         }
     }
 }
 
-/** One compact card: fire type, address and status, so a reply never goes to the wrong report. */
 @Composable
-private fun IncidentHeader(incident: Incident) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Border),
-        color = MaterialTheme.colorScheme.surface
+private fun Avatar(initials: String) {
+    Box(
+        modifier = Modifier.size(44.dp).background(Blue.copy(alpha = 0.16f), CircleShape),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(incident.fireTypeEnum().label, style = MaterialTheme.typography.titleSmall)
-                if (incident.addressText.isNotBlank()) {
-                    Text(
-                        text = incident.addressText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            StatusChip(incident.statusEnum())
-        }
+        Text(
+            initials,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = Blue
+        )
+    }
+}
+
+@Composable
+private fun QuickReplyChip(text: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        )
     }
 }
 
 @Composable
 private fun MessageList(items: List<ChatItem>) {
     val listState = rememberLazyListState()
+    val now = System.currentTimeMillis()
     // Keep the newest message in view, including when a reply arrives while the screen is open.
     LaunchedEffect(items.size) {
         if (items.isNotEmpty()) listState.animateScrollToItem(items.lastIndex)
@@ -176,10 +218,27 @@ private fun MessageList(items: List<ChatItem>) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        items(items, key = { it.id }) { MessageBubble(it) }
+        itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
+            // A centred day label before the first message of each day.
+            val label = item.sentAtMillis?.let { ChatRules.dayLabel(it, now) }
+            val previous = items.getOrNull(index - 1)?.sentAtMillis?.let { ChatRules.dayLabel(it, now) }
+            Column {
+                if (label != null && label != previous) {
+                    Text(
+                        label,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                MessageBubble(item)
+            }
+        }
     }
 }
 
@@ -190,36 +249,37 @@ private fun MessageBubble(item: ChatItem) {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (mine) Alignment.End else Alignment.Start
     ) {
-        if (!mine) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        if (!mine && item.fromResponder) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 3.dp)) {
                 Text(
                     text = item.senderName,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (item.fromResponder) {
-                    Spacer(Modifier.width(6.dp))
-                    ChipPill("Responder", Blue)
-                }
+                Spacer(Modifier.width(6.dp))
+                ChipPill("Responder", Blue)
             }
         }
         Surface(
-            modifier = Modifier.widthIn(max = 300.dp).padding(top = 2.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (mine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            modifier = Modifier.widthIn(max = 300.dp),
+            shape = if (mine) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp) else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp),
+            // Mine: the dark bubble of the design. Theirs: a white one.
+            color = if (mine) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surface,
+            contentColor = if (mine) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface,
+            shadowElevation = if (mine) 0.dp else 1.dp
         ) {
             Text(
                 text = item.text,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp)
             )
         }
         Text(
-            text = item.timeLabel,
-            style = MaterialTheme.typography.bodySmall,
+            // The clock time once the server has the message; "Sending..." until then.
+            text = item.sentAtMillis?.let { ChatRules.clockLabel(it) } ?: item.timeLabel,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp)
+            modifier = Modifier.padding(top = 3.dp)
         )
     }
 }
@@ -227,15 +287,15 @@ private fun MessageBubble(item: ChatItem) {
 @Composable
 private fun MessageInput(draft: String, onDraftChange: (String) -> Unit, onSend: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.Bottom
     ) {
         OutlinedTextField(
             value = draft,
             onValueChange = onDraftChange,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Type a message") },
-            shape = RoundedCornerShape(24.dp),
+            placeholder = { Text("Write a message") },
+            shape = RoundedCornerShape(18.dp),
             maxLines = 4,
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
         )
@@ -249,7 +309,7 @@ private fun MessageInput(draft: String, onDraftChange: (String) -> Unit, onSend:
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
             ),
-            modifier = Modifier.padding(bottom = 6.dp)
+            modifier = Modifier.size(56.dp)
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send message")
         }

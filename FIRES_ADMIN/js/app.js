@@ -1,6 +1,6 @@
 import {
   U, I, RS, ACT, fl, photoBlock,
-  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, listenActivity,
+  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, listenActivity,
   createResponderAuth, saveResponderProfile, sendResponderReset, changeUserRole, verifyIncident,
   newAssignmentId, saveAssignment, refreshAssignments
 } from "./data.js";
@@ -24,6 +24,8 @@ import {
   resolveStats, fmtMin, reportCsv, csvFileName, todayPH, daysInRange, toCsv
 } from "./reportRules.js";
 import { auth, db, onAuthStateChanged, signOut, doc, getDoc } from "./firebase.js";
+import { AI_ENDPOINT } from "./config.js";
+import { aiPanelHtml, buildPayload, requestSuggestion } from "./aiSuggest.js";
 const $=s=>document.querySelector(s);let tab="over";
 const mins=i=>Math.round((i.resolvedMs-i.submittedMs)/6e4);
 let openId=null;
@@ -38,6 +40,9 @@ const screens={over,map,resp,rec,rep,act};
 let unsub=null,usersAt=0,renderSeq=0;
 const live=()=>tab==="over"||tab==="map"||tab==="act";
 const stopLive=()=>{if(unsub){unsub();unsub=null}if(unsubAct){unsubAct();unsubAct=null}};
+// What the responder's phone shows when they are assigned or taken off a report (max 200 characters).
+const assignedText=i=>`${i.code} \u00B7 ${i.loc}. ${typeLabel(i.fireType)}${i.trapped?", possibly trapped":""}. Tap to open and start your response.`.slice(0,200);
+const removedText=i=>`An administrator took you off ${i.code}. No action needed.`;
 const errMsg=e=>e&&e.code==="permission-denied"?"Your account is not allowed to read this data. Check that your role is admin and that firestore.rules is deployed."
     :e&&(e.code==="unavailable"||e.code==="network-request-failed")?"No internet connection. Check your network and try again."
     :e&&e.code==="failed-precondition"?"This query needs a Firestore index. Open the browser console (F12) and use the link in the error to create it."
@@ -375,16 +380,45 @@ return out.join("")}
 function detail(id){const i=findIncident(id);if(!i)return;
 openId=id;const p=loadDetail(i);drawerFor(i);p.then(()=>{if(openId===id)drawerFor(i)})}
 function drawerFor(i){const ld=i.detailState==="loading",er=i.detailState==="error";
-const asn=ld?"Loading...":er?"Could not load.":i.res.map(r=>`${r[2]} - ${r[1]}${r[3].length?" ("+r[3].join(", ")+")":""}`).join("<br>")||"None assigned yet";
+const canRm=!ld&&!er&&i.assignLoaded===true&&canAssign(i);
+const asn=ld?"Loading...":er?"Could not load.":i.res.map(r=>`<div class="arow">${r[2]} - ${r[1]}${r[3].length?" ("+r[3].join(", ")+")":""}${canRm?` <button type="button" class="lnk rmasg" data-r="${esc(r[0])}">Remove</button>`:""}</div>`).join("")||"None assigned yet";
 const msg=ld?"Loading...":er?"Could not load.":i.msgs.map(m=>`<div class="msg"><b>${m[0]}</b><br>${m[1]}</div>`).join("")||"No messages";
 open(`<small class="muted">Incident</small><h2>${i.code}</h2><div class="pills"><span class="pill ${i.severity}">${i.severity}</span> <span class="pill ${i.status}">${i.status}</span></div>
 <div class="kv"><small>Photo from reporter</small>${photoBlock(i)}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
 <div class="kv"><small>Submitted</small>${i.submittedAt}</div><div class="kv"><small>Date resolved</small>${i.dateResolved?i.dateResolved+" ("+mins(i)+" min)":ld?"Loading...":i.rawStatus==="resolved"?"Resolved (record not found)":"Not yet resolved"}</div>
-<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div><div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
+<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${aiPanelHtml(i,aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
 <div class="step"><h3 class="stepn"><span>2</span>Responders</h3><div class="kv"><small>Assigned responders</small>${asn}${assignButtonHtml(i)}</div></div>
-<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id)}
+<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAi(i.id)}
+// ---- AI suggestion (advice only, nothing is written) ----
+// The panel asks the Cloudflare Worker (config.js) for a severity and duplicate hint, only when the
+// administrator presses the button. If it fails the rest of the drawer works exactly as before.
+const aiSt={};
+function redrawAi(id){if(openId!==id)return;const e=$("#aip"),i=findIncident(id);if(!i)return;
+  const h=aiPanelHtml(i,aiSt[id],AI_ENDPOINT,I);if(e)e.outerHTML=h;wireAi(id)}
+function wireAi(id){
+  const b=$("#aib");
+  if(b)b.onclick=async()=>{const i=findIncident(id);if(!i)return;
+    aiSt[id]={status:"loading"};redrawAi(id);
+    let r;
+    try{const tok=await auth.currentUser.getIdToken();r=await requestSuggestion(AI_ENDPOINT,tok,buildPayload(i,I))}
+    catch(e){r={ok:false,text:"Sign in again, then try once more."}}
+    aiSt[id]=r.ok?{status:"done",answer:r.answer}:{status:"error",text:r.text};redrawAi(id)};
+  document.querySelectorAll("#aip [data-aid]").forEach(a=>a.onclick=e=>{e.preventDefault();detail(a.dataset.aid)})}
 // ---- Assign responder (W13.15 to W13.19) ----
 // The button is drawn by assignButtonHtml() under "Assigned responders", on open reports only.
+// Remove an assigned responder (admin). Asks first; the responder is told on their phone.
+function wireRemove(id){document.querySelectorAll(".rmasg").forEach(b=>b.onclick=()=>askRemove(id,b.dataset.r,b))}
+function askRemove(id,rid,from){
+  const i=findIncident(id);if(!i||!canAssign(i))return;
+  const row=i.res.find(r=>r[0]===rid);if(!row)return;
+  confirmDlg({
+    title:"Remove this responder?",
+    body:`${row[2]} will be taken off ${i.code} and told on their phone. You can assign them again later.`,
+    confirm:"Remove responder",from,
+    run:()=>removeAssignment(id,rid,i),
+    done:async()=>{logAct("unassign",`removed ${plain(row[2])} from ${i.code}`,id);notifyAssigned(rid,id,removedText(i),"removed");toast("Responder removed.");afterAssign(id)}
+  });
+}
 function wireAssign(id){const b=$("#asg");if(b)b.onclick=()=>askAssign(id,b)}
 // The Assign dialog. W13.16: the report and the responder list (accounts with the responder role from U, without
 // the ones already assigned, or a short message when nobody is left). W13.17: the unit select, preselected from the
@@ -426,7 +460,7 @@ function askAssign(id,from){
     const v=resultView(r);
     if(r.kind==="failed")console.error(r.error);
     Object.keys(ERROR_IDS).forEach(k=>setTxt(ERROR_IDS[k],v.errors[k]||""));
-    if(v.close){closeDlg();toast(v.toast);const who=list.find(x=>x.id===form.responderId);logAct("assign",`assigned ${who?who.name:"a responder"} to ${cur.code}`,id);afterAssign(id);return}
+    if(v.close){closeDlg();toast(v.toast);const who=list.find(x=>x.id===form.responderId);logAct("assign",`assigned ${who?who.name:"a responder"} to ${cur.code}`,id);notifyAssigned(form.responderId,id,assignedText(cur));afterAssign(id);return}
     busy(false);btn.textContent=v.button;
     if(v.lock){btn.disabled=true;$("#dno").textContent=v.cancel}
     if(v.focus==="responder")ar.focus();else if(v.focus==="unit")au.focus();

@@ -1,6 +1,19 @@
 package com.example.fires.ui.navigation
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.example.fires.data.model.statusEnum
+import com.example.fires.data.repository.IncidentRepository
+import com.example.fires.ui.citizen.CitizenBottomBar
+import com.example.fires.ui.citizen.CitizenTab
+import com.example.fires.ui.citizen.ProfileScreen
+import com.example.fires.util.attempt
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,6 +54,9 @@ import com.example.fires.ui.common.ChatScreen
 import com.example.fires.ui.responder.AssignScreen
 import com.example.fires.ui.responder.DashboardScreen
 import com.example.fires.ui.responder.HistoryScreen
+import com.example.fires.ui.responder.ResponderBottomBar
+import com.example.fires.ui.responder.ResponderProfileScreen
+import com.example.fires.ui.responder.ResponderTab
 import com.example.fires.ui.responder.IncidentDetailScreen
 import com.example.fires.ui.responder.ResolveScreen
 import com.example.fires.util.AlertTargetRules
@@ -68,10 +84,71 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
     // Same as go(), but a quick double tap cannot open the same screen twice.
     fun goOnce(route: String) = navController.navigate(route) { launchSingleTop = true }
 
-    // Temporary sign-out (C7). Ends the Firebase session, then clears the whole back stack and
-    // opens Login, so Back closes the app instead of returning to a signed-in screen.
     val authRepo = remember { AuthRepository() }
     val context = LocalContext.current
+
+    // ---------- Citizen tab bar (round 2): Home, My reports, Chat, Profile ----------
+    val scope = rememberCoroutineScope()
+    var chatTabMessage by remember { mutableStateOf<String?>(null) }
+
+    // Moves between the tabs without stacking them: everything above Home is popped first.
+    fun openTab(route: String) = navController.navigate(route) {
+        popUpTo(Routes.CITIZEN_HOME)
+        launchSingleTop = true
+    }
+
+    // The Chat tab opens the conversation of the newest report that is still open.
+    fun openChatTab() {
+        val uid = authRepo.currentUid ?: return
+        scope.launch {
+            val reports = attempt { IncidentRepository().myIncidents(uid) }.getOrNull()
+            if (reports == null) {
+                chatTabMessage = "We couldn't check your reports. Check your connection and try again."
+                return@launch
+            }
+            val open = reports
+                .filter { it.statusEnum().isActive }
+                .maxByOrNull { it.submittedAt?.seconds ?: Long.MAX_VALUE }
+            if (open != null) goOnce(Routes.chat(open.id))
+            else chatTabMessage = "Chat opens for a report that is still open. You have none right now."
+        }
+    }
+
+    val citizenBar: @Composable (CitizenTab) -> Unit = { selected ->
+        CitizenBottomBar(
+            selected = selected,
+            onHome = { if (!navController.popBackStack(Routes.CITIZEN_HOME, false)) openTab(Routes.CITIZEN_HOME) },
+            onReports = { openTab(Routes.MY_REPORTS) },
+            onChat = { openChatTab() },
+            onProfile = { openTab(Routes.PROFILE) }
+        )
+    }
+
+    // ---------- Responder tab bar (round 2): Dashboard, History, Profile ----------
+    fun openResponderTab(route: String) = navController.navigate(route) {
+        popUpTo(Routes.RESPONDER_HOME)
+        launchSingleTop = true
+    }
+    val responderBar: @Composable (ResponderTab) -> Unit = { selected ->
+        ResponderBottomBar(
+            selected = selected,
+            onDashboard = { if (!navController.popBackStack(Routes.RESPONDER_HOME, false)) openResponderTab(Routes.RESPONDER_HOME) },
+            onHistory = { openResponderTab(Routes.HISTORY) },
+            onProfile = { openResponderTab(Routes.RESPONDER_PROFILE) }
+        )
+    }
+
+    chatTabMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { chatTabMessage = null },
+            title = { Text("No chat to open") },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { chatTabMessage = null }) { Text("OK") } }
+        )
+    }
+
+    // Temporary sign-out (C7). Ends the Firebase session, then clears the whole back stack and
+    // opens Login, so Back closes the app instead of returning to a signed-in screen.
     fun signOut() {
         // F1.12: stop the alert service FIRST, so no alert for this account can arrive after
         // sign-out (and it does not sit there failing once the session is gone). Stopping a
@@ -270,8 +347,8 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             composable(Routes.CITIZEN_HOME) {
                 HomeScreen(
                     onSosClick = { goOnce(Routes.REPORT) },
-                    onMyReportsClick = { goOnce(Routes.MY_REPORTS) },
-                    onSignOut = { signOut() }
+                    onSignOut = { signOut() },
+                    bottomBar = { citizenBar(CitizenTab.HOME) }
                 )
             }
             composable(Routes.REPORT) {
@@ -301,7 +378,8 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
                 AlertSentScreen(
                     incidentId = id,
                     onBack = { back() },
-                    onViewStatus = { goOnce(Routes.status(id)) }
+                    onViewStatus = { goOnce(Routes.status(id)) },
+                    onAddMessage = { goOnce(Routes.chat(id)) }
                 )
             }
             composable(Routes.STATUS, arguments = incidentIdArg) { entry ->
@@ -314,8 +392,14 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             }
             composable(Routes.MY_REPORTS) {
                 MyReportsScreen(
-                    onBack = { back() },
-                    onOpen = { incidentId -> goOnce(Routes.status(incidentId)) }
+                    onOpen = { incidentId -> goOnce(Routes.status(incidentId)) },
+                    bottomBar = { citizenBar(CitizenTab.REPORTS) }
+                )
+            }
+            composable(Routes.PROFILE) {
+                ProfileScreen(
+                    onSignOut = { signOut() },
+                    bottomBar = { citizenBar(CitizenTab.PROFILE) }
                 )
             }
         }
@@ -325,8 +409,8 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             composable(Routes.RESPONDER_HOME) {
                 DashboardScreen(
                     onOpenIncident = { incidentId -> goOnce(Routes.incidentDetail(incidentId)) },
-                    onHistory = { goOnce(Routes.HISTORY) },
-                    onSignOut = { signOut() }
+                    onHistory = { openResponderTab(Routes.HISTORY) },
+                    onProfile = { openResponderTab(Routes.RESPONDER_PROFILE) }
                 )
             }
             composable(Routes.INCIDENT_DETAIL, arguments = incidentIdArg) { entry ->
@@ -351,9 +435,16 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
                 // Back lands on the detail screen, which now shows the report as resolved.
                 ResolveScreen(incidentId = id, onBack = { back() }, onDone = { back() })
             }
+            composable(Routes.RESPONDER_PROFILE) {
+                ResponderProfileScreen(
+                    onSignOut = { signOut() },
+                    bottomBar = { responderBar(ResponderTab.PROFILE) }
+                )
+            }
             composable(Routes.HISTORY) {
                 HistoryScreen(
                     onBack = { back() },
+                    bottomBar = { responderBar(ResponderTab.HISTORY) },
                     // From history to a detail screen. Back returns to history.
                     onOpenIncident = { incidentId -> goOnce(Routes.incidentDetail(incidentId)) }
                 )

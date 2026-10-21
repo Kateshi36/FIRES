@@ -10,6 +10,7 @@ import com.example.fires.util.AlertChannels
 import com.example.fires.util.AlertIntents
 import com.example.fires.util.CitizenAlert
 import com.example.fires.util.CitizenAlertKind
+import com.example.fires.util.NotificationPrefs
 
 /**
  * Posts the citizen's notifications (F2). The wording is already made by CitizenAlertRules; this
@@ -28,6 +29,11 @@ class CitizenNotifier(context: Context) {
     // areNotificationsEnabled() is checked first. Lint cannot see that.
     @SuppressLint("MissingPermission")
     fun post(alert: CitizenAlert) {
+        // The person can switch each kind off on the Profile screen.
+        if (!NotificationPrefs.allows(context, alert.kind)) {
+            Log.i(TAG, "${alert.kind} alerts are switched off in Profile; skipped ${alert.incidentId}")
+            return
+        }
         if (!manager.areNotificationsEnabled()) {
             Log.i(TAG, "Notifications are off; skipped ${alert.kind} for ${alert.incidentId}")
             return

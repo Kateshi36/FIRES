@@ -1,12 +1,12 @@
 package com.example.fires.ui.responder
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -16,19 +16,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,17 +39,19 @@ import com.example.fires.data.model.FireType
 import com.example.fires.data.model.Incident
 import com.example.fires.data.model.IncidentStatus
 import com.example.fires.data.model.Severity
-import com.example.fires.data.model.fireTypeEnum
-import com.example.fires.data.model.severityEnum
-import com.example.fires.data.model.statusEnum
 import com.example.fires.ui.auth.ErrorBanner
 import com.example.fires.ui.common.LabeledTextField
 import com.example.fires.ui.common.PrimaryButton
-import com.example.fires.ui.common.SeverityChip
-import com.example.fires.ui.common.StatusChip
-import com.example.fires.ui.theme.Border
+import com.example.fires.ui.common.RoundHeader
+import com.example.fires.ui.common.SectionLabel
+import com.example.fires.ui.common.SoftCard
+import com.example.fires.ui.common.Tone
+import com.example.fires.ui.common.ToneBanner
+import com.example.fires.ui.common.TonePill
 import com.example.fires.ui.theme.FIRESTheme
+import com.example.fires.util.ChatRules
 import com.example.fires.util.ResolveRules
+import com.example.fires.util.incidentCode
 import com.example.fires.viewmodel.ResolveUiState
 import com.example.fires.viewmodel.ResolveViewModel
 
@@ -74,6 +77,7 @@ fun ResolveScreen(
         state = state,
         onBack = onBack,
         onRemarksChange = viewModel::onRemarksChange,
+        onAddNote = viewModel::addNote,
         onResolve = viewModel::onResolveClick
     )
 }
@@ -84,22 +88,21 @@ fun ResolveContent(
     state: ResolveUiState,
     onBack: () -> Unit,
     onRemarksChange: (String) -> Unit,
+    onAddNote: (String) -> Unit = {},
     onResolve: () -> Unit
 ) {
     val incident = state.incident
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(end = 16.dp, top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack, enabled = !state.isSaving) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                Text("Resolve incident", style = MaterialTheme.typography.headlineSmall)
-            }
+            RoundHeader(
+                title = "Resolve incident",
+                sub = incident?.let {
+                    incidentCode(it.id) + if (it.addressText.isNotBlank()) " \u00B7 " + it.addressText else ""
+                },
+                onBack = if (state.isSaving) null else onBack
+            )
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -109,26 +112,41 @@ fun ResolveContent(
                         ErrorBanner("We couldn't find this incident. It may have been removed.")
                     }
 
-                    else -> Form(state, incident, onRemarksChange)
+                    else -> Form(state, incident, onRemarksChange, onAddNote)
                 }
             }
 
             if (incident != null) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     PrimaryButton(
                         text = "Resolve incident",
                         onClick = onResolve,
                         enabled = state.canResolve,
                         loading = state.isSaving
                     )
+                    TextButton(
+                        onClick = onBack,
+                        enabled = !state.isSaving,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Cancel") }
                 }
             }
         }
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun Form(state: ResolveUiState, incident: Incident, onRemarksChange: (String) -> Unit) {
+private fun Form(
+    state: ResolveUiState,
+    incident: Incident,
+    onRemarksChange: (String) -> Unit,
+    onAddNote: (String) -> Unit
+) {
+    val editable = state.canResolve && !state.isSaving
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -137,31 +155,24 @@ private fun Form(state: ResolveUiState, incident: Incident, onRemarksChange: (St
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Which incident this is for, so the responder is never unsure what they are closing.
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, Border),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(incident.fireTypeEnum().label, style = MaterialTheme.typography.titleMedium)
-                if (incident.addressText.isNotBlank()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        incident.addressText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        SummaryCard(state, incident)
+
+        if (!state.canResolve) ErrorBanner(ResolveRules.MSG_NOT_ON_SCENE)
+
+        Column {
+            SectionLabel("WHAT HAPPENED?")
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ResolveRules.QUICK_NOTES.forEach { note ->
+                    FilterChip(
+                        selected = ResolveRules.hasNote(state.remarks, note),
+                        onClick = { onAddNote(note) },
+                        enabled = editable,
+                        label = { Text(note) }
                     )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SeverityChip(incident.severityEnum())
-                    StatusChip(incident.statusEnum())
                 }
             }
         }
-
-        if (!state.canResolve) ErrorBanner(ResolveRules.MSG_NOT_ON_SCENE)
 
         Column {
             LabeledTextField(
@@ -172,7 +183,7 @@ private fun Form(state: ResolveUiState, incident: Incident, onRemarksChange: (St
                 error = state.remarksError,
                 singleLine = false,
                 minLines = 5,
-                enabled = state.canResolve && !state.isSaving
+                enabled = editable
             )
             Text(
                 text = "${state.remarks.trim().length} / ${ResolveRules.MAX_REMARKS}",
@@ -183,16 +194,53 @@ private fun Form(state: ResolveUiState, incident: Incident, onRemarksChange: (St
             )
         }
 
-        Text(
-            "Resolving closes this report and saves the remarks in the incident records. " +
-                "It leaves the dashboard.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        ToneBanner(text = ResolveRules.RESOLVE_WARNING, tone = Tone.AMBER, icon = Icons.Filled.Warning)
 
         if (state.error != null) ErrorBanner(state.error)
 
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+/**
+ * Reported time, when responders reached the scene (the last change to the report, which is the
+ * move to "on scene"), how long it took in all, and who was sent. Nothing is invented: a value the
+ * database does not have is left out.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SummaryCard(state: ResolveUiState, incident: Incident) {
+    val reportedMs = incident.submittedAt?.toDate()?.time
+    val sceneMs = incident.updatedAt?.toDate()?.time
+    SoftCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Fact("REPORTED", reportedMs?.let { ChatRules.clockLabel(it) } ?: "\u2014", Modifier.weight(1f))
+                Fact("ON SCENE", sceneMs?.let { ChatRules.clockLabel(it) } ?: "\u2014", Modifier.weight(1f))
+                Fact(
+                    "DURATION",
+                    reportedMs?.let { ResolveRules.durationLabel(it, System.currentTimeMillis()) } ?: "\u2014",
+                    Modifier.weight(1f)
+                )
+            }
+            val who = state.assignments.flatMap { a ->
+                listOf(a.unit.ifBlank { a.responderName }) + a.assignedResources
+            }.filter { it.isNotBlank() }.distinct()
+            if (who.isNotEmpty()) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    who.forEach { TonePill(it, Tone.GREY) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Fact(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        SectionLabel(label)
+        Spacer(Modifier.height(2.dp))
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, maxLines = 1)
     }
 }
 

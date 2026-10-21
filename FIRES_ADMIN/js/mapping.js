@@ -86,7 +86,15 @@ export function mapIncident(id, d, extra = {}) {
     submittedAt: fmtPH(submittedMs),
     dateResolved: null, resolvedMs: null, resolvedBy: "", remarks: "",
     res: [], msgs: [],
-    assignLoaded: false, detailState: "idle"
+    assignLoaded: false, detailState: "idle",
+    // Plain text (NOT escaped) for the AI helper only. Never put it into HTML. No name or phone here.
+    plain: {
+      fireType: d.fireType || "other", description: String(d.description ?? ""), address: addr,
+      fireSize: d.fireSize || "small", peopleAtRisk: Number(d.peopleAtRisk) || 0, trapped: d.trapped === true,
+      vulnerable: Array.isArray(d.vulnerablePersons) ? d.vulnerablePersons.map(String) : [],
+      hazards: Array.isArray(d.hazards) ? d.hazards.map(String) : [],
+      severity: String(d.severity || "low")
+    }
   };
   if (extra.record) applyRecord(i, extra.record);
   if (extra.assignments && extra.assignments.updatedMs === updatedMs) {

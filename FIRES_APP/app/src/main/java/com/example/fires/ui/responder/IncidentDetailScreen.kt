@@ -23,6 +23,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +76,9 @@ import com.example.fires.ui.common.rememberLocationAccess
 import com.example.fires.ui.common.SecondaryButton
 import com.example.fires.ui.common.SeverityChip
 import com.example.fires.ui.common.StatusChip
+import com.example.fires.ui.common.Tone
+import com.example.fires.ui.common.ToneBanner
+import com.example.fires.ui.common.TonePill
 import com.example.fires.ui.common.severityColor
 import com.example.fires.ui.common.statusColor
 import com.example.fires.ui.theme.Amber
@@ -158,7 +164,6 @@ fun IncidentDetailScreen(
         onRetry = viewModel::retry,
         onRetryPhoto = viewModel::retryPhoto,
         actions = IncidentDetailActions(
-            onReview = viewModel::review,
             onSetSeverity = viewModel::setSeverity,
             onAdvanceStatus = viewModel::advanceStatus,
             onStepBack = viewModel::stepBackStatus,
@@ -198,7 +203,6 @@ fun IncidentDetailScreen(
 
 /** What the responder can do on this screen. All no-ops by default, so previews need none of it. */
 data class IncidentDetailActions(
-    val onReview: (Verification) -> Unit = {},
     val onSetSeverity: (Severity) -> Unit = {},
     val onAdvanceStatus: () -> Unit = {},
     val onStepBack: () -> Unit = {},
@@ -298,8 +302,12 @@ private fun IncidentDetails(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SeverityChip(incident.severityEnum())
                 StatusChip(incident.statusEnum())
-                val verification = incident.verificationEnum()
-                ChipPill(verification.label, verificationColor(verification))
+                if (IncidentActionRules.awaitsAdminVerification(incident.statusEnum())) {
+                    TonePill("Awaiting admin", Tone.GREY, icon = Icons.Filled.HourglassEmpty)
+                } else {
+                    val verification = incident.verificationEnum()
+                    ChipPill(verification.label, verificationColor(verification))
+                }
             }
             Spacer(Modifier.height(6.dp))
             Text(
@@ -310,6 +318,17 @@ private fun IncidentDetails(
         }
 
         if (incident.isSuspicious) FlaggedNotice()
+
+        if (IncidentActionRules.awaitsAdminVerification(incident.statusEnum()) &&
+            (incident.isDuplicate || state.duplicates.isNotEmpty())
+        ) {
+            ToneBanner(
+                title = "Possible duplicate",
+                text = IncidentActionRules.DUPLICATE_NOTE,
+                tone = Tone.AMBER,
+                icon = Icons.Filled.Warning
+            )
+        }
 
         if (incident.isDuplicate) {
             DuplicateOfPanel(
@@ -426,14 +445,13 @@ private fun IncidentDetails(
 // ---------- Actions (E3, E4) ----------
 
 /**
- * Verify / false / duplicate, status, assign and severity. Only the actions that make sense for
+ * Status, assign and severity (verification is the administrator's, on the website). Only the actions that make sense for
  * the report's current status are drawn (see IncidentActionRules). False and duplicate close the
  * report, so they ask first.
  */
 @Composable
 private fun ActionsPanel(incident: Incident, actionError: String?, actions: IncidentDetailActions) {
     val status = incident.statusEnum()
-    var confirm by rememberSaveable { mutableStateOf<Verification?>(null) }
 
     Panel(title = "Actions") {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -449,21 +467,20 @@ private fun ActionsPanel(incident: Incident, actionError: String?, actions: Inci
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                if (IncidentActionRules.canReview(status)) {
-                    Text("Is this report real?", style = MaterialTheme.typography.labelLarge)
-                    PrimaryButton(text = "Verify report", onClick = { actions.onReview(Verification.VERIFIED) })
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SecondaryButton(
-                            text = "False report",
-                            onClick = { confirm = Verification.FALSE },
-                            modifier = Modifier.weight(1f)
-                        )
-                        SecondaryButton(
-                            text = "Duplicate",
-                            onClick = { confirm = Verification.DUPLICATE },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                if (IncidentActionRules.awaitsAdminVerification(status)) {
+                    ToneBanner(
+                        title = IncidentActionRules.WAITING_TITLE,
+                        text = IncidentActionRules.ADMIN_VERIFIES_NOTE,
+                        tone = Tone.BLUE,
+                        icon = Icons.Filled.Info
+                    )
+                    // Shown but locked, so the next step is visible before it can be taken.
+                    PrimaryButton(text = "Mark as dispatched", onClick = {}, enabled = false)
+                    Text(
+                        IncidentActionRules.LOCKED_HINT,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 val next = IncidentActionRules.nextStatus(status)
@@ -499,22 +516,6 @@ private fun ActionsPanel(incident: Incident, actionError: String?, actions: Inci
                 }
             }
         }
-    }
-
-    val pending = confirm
-    if (pending != null) {
-        AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text(IncidentActionRules.confirmTitle(pending)) },
-            text = { Text(IncidentActionRules.confirmBody(pending)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = null
-                    actions.onReview(pending)
-                }) { Text(IncidentActionRules.confirmButton(pending)) }
-            },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } }
-        )
     }
 }
 

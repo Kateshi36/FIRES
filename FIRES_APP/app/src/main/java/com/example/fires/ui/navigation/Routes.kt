@@ -25,6 +25,7 @@ object Routes {
     const val STATUS = "status/{$ARG_INCIDENT_ID}"
     fun status(incidentId: String) = "status/$incidentId"
     const val MY_REPORTS = "my_reports"
+    const val PROFILE = "profile"
 
     // Responder area
     const val RESPONDER_GRAPH = "responder_graph"
@@ -36,4 +37,5 @@ object Routes {
     const val RESOLVE = "resolve/{$ARG_INCIDENT_ID}"
     fun resolve(incidentId: String) = "resolve/$incidentId"
     const val HISTORY = "history"
+    const val RESPONDER_PROFILE = "responder_profile"
 }

@@ -66,6 +66,7 @@ export const updateDoc = async (ref, data) => {
   if (nextUpdateError) { const e = nextUpdateError; nextUpdateError = null; throw e; }
   calls.push({ op: "update", path: ref.path, data });
 };
+export const deleteDoc = async ref => { calls.push({ op: "delete", path: ref.path }); delete store[ref.path]; };
 export const setDoc = async (ref, data) => {
   if (nextSetError) { const e = nextSetError; nextSetError = null; throw e; }
   calls.push({ op: "set", path: ref.path, data });

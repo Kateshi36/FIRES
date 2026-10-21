@@ -1,19 +1,8 @@
 package com.example.fires.ui.responder
 
 import android.widget.Toast
-import com.example.fires.ui.theme.ThemeMenuItem
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import com.example.fires.R
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,25 +14,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,17 +39,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,64 +60,69 @@ import com.example.fires.data.model.FireType
 import com.example.fires.data.model.Incident
 import com.example.fires.data.model.IncidentStatus
 import com.example.fires.data.model.Severity
+import com.example.fires.data.model.Verification
 import com.example.fires.data.model.fireTypeEnum
 import com.example.fires.data.model.severityEnum
 import com.example.fires.data.model.statusEnum
+import com.example.fires.data.repository.AssignedNotice
 import com.example.fires.ui.auth.ErrorBanner
 import com.example.fires.ui.common.DEFAULT_MAP_CENTER
 import com.example.fires.ui.common.FiresMap
 import com.example.fires.ui.common.LatLon
 import com.example.fires.ui.common.MapPoint
+import com.example.fires.ui.common.RoundHeader
 import com.example.fires.ui.common.SecondaryButton
-import com.example.fires.ui.common.SeverityChip
+import com.example.fires.ui.common.SoftCard
 import com.example.fires.ui.common.StatusChip
+import com.example.fires.ui.common.Tone
+import com.example.fires.ui.common.TonePill
 import com.example.fires.ui.common.severityColor
 import com.example.fires.ui.common.statusColor
-import com.example.fires.ui.theme.Amber
 import com.example.fires.ui.theme.Border
 import com.example.fires.ui.theme.FIRESTheme
+import com.example.fires.util.AssignedNoticeRules
 import com.example.fires.util.BatteryOptimization
 import com.example.fires.util.BatteryPromptRules
 import com.example.fires.util.ChatRules
-import com.example.fires.util.DashboardRules
-import com.example.fires.util.DistanceFilter
+import com.example.fires.util.DashboardTab
+import com.example.fires.util.DashboardTiles
 import com.example.fires.util.IncidentGroup
-import com.example.fires.util.StatusFilter
+import com.example.fires.util.ResponderDashboardRules
+import com.example.fires.util.incidentCode
 import com.example.fires.util.timeAgoLabel
-import com.example.fires.viewmodel.DashboardTab
 import com.example.fires.viewmodel.DashboardUiState
 import com.example.fires.viewmodel.DashboardViewModel
 
+/** The black "You were assigned" banner keeps the same dark look in light and dark mode. */
+private val BannerInk = Color(0xFF1B1A19)
+
 /**
- * Responder dashboard (E1): every open incident on a live map and in a list, with filters.
- * Both views show the same filtered groups, so switching between them keeps the filters.
+ * Responder dashboard (round 2 design): a greeting with the notice bell, the black "You were
+ * assigned" banner, the Open / Awaiting admin / Mine counts and three segments: Mine, All open
+ * and Map. Both lists and the map show the same live data.
  *
  * @param onOpenIncident opens the detail screen of an incident (gets the incident id).
- * @param onHistory opens the history of resolved incidents.
  */
 @Composable
 fun DashboardScreen(
     onOpenIncident: (String) -> Unit,
     onHistory: () -> Unit,
-    onSignOut: () -> Unit,
+    onProfile: () -> Unit,
     viewModel: DashboardViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // The distance filter and the "near me" labels need the responder's position.
-    LaunchedEffect(Unit) { viewModel.refreshLocation(context) }
-
-    // ---- Battery optimization (F1.13) ----
-    // Whether Android still may put the app to sleep. Checked again every time the screen comes
-    // back, because the responder changes it in a system dialog or in Settings, outside the app.
-    var batteryIgnored by remember { mutableStateOf(BatteryOptimization.isIgnoring(context)) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        batteryIgnored = BatteryOptimization.isIgnoring(context)
+    LaunchedEffect(Unit) {
+        viewModel.loadSeen(context)
+        viewModel.refreshLocation(context)
     }
+    // Assignments are read again every time the screen comes back to the front.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
+
+    // ---- Battery optimization (F1.13): asked once on the first visit; the Profile tab has the switch ----
     // rememberSaveable: turning the phone must not close the dialog before it has been answered.
     var showBatteryDialog by rememberSaveable { mutableStateOf(false) }
-    // First visit: ask once, and remember that we did, even if the app is closed before answering.
     LaunchedEffect(Unit) {
         if (BatteryPromptRules.shouldAskOnFirstVisit(
                 isIgnoringOptimizations = BatteryOptimization.isIgnoring(context),
@@ -156,17 +148,18 @@ fun DashboardScreen(
     DashboardContent(
         state = state,
         onTab = viewModel::setTab,
-        onStatusFilter = viewModel::setStatusFilter,
-        onDistanceFilter = viewModel::setDistanceFilter,
         onSelect = viewModel::select,
         onClearSelection = viewModel::clearSelection,
         onRecenter = { viewModel.refreshLocation(context) },
         onRetry = viewModel::retry,
-        onOpenIncident = onOpenIncident,
+        onOpenIncident = { id ->
+            state.banner?.let { if (it.incidentId == id) viewModel.dismissBanner(it.id) }
+            onOpenIncident(id)
+        },
+        onDismissBanner = viewModel::dismissBanner,
+        onBellOpened = { viewModel.markNoticesSeen(context) },
         onHistory = onHistory,
-        onSignOut = onSignOut,
-        showBatteryItem = BatteryPromptRules.showMenuItem(batteryIgnored),
-        onBatteryClick = { showBatteryDialog = true }
+        onProfile = onProfile
     )
 }
 
@@ -175,204 +168,260 @@ fun DashboardScreen(
 fun DashboardContent(
     state: DashboardUiState,
     onTab: (DashboardTab) -> Unit,
-    onStatusFilter: (StatusFilter) -> Unit,
-    onDistanceFilter: (DistanceFilter) -> Unit,
     onSelect: (String) -> Unit,
     onClearSelection: () -> Unit,
     onRecenter: () -> Unit,
     onRetry: () -> Unit,
     onOpenIncident: (String) -> Unit,
+    onDismissBanner: (String) -> Unit = {},
+    onBellOpened: () -> Unit = {},
     onHistory: () -> Unit,
-    onSignOut: () -> Unit,
-    showBatteryItem: Boolean = false,
-    onBatteryClick: () -> Unit = {}
+    onProfile: () -> Unit
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
-    var confirmSignOut by remember { mutableStateOf(false) }
+    var bellOpen by remember { mutableStateOf(false) }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
 
-            // ---- Top bar ----
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_logo),
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Dashboard", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                IconButton(onClick = onHistory) {
-                    Icon(Icons.Filled.History, contentDescription = "Incident history")
-                }
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
+                // ---- Greeting and bell ----
+                RoundHeader(
+                    title = if (state.firstName.isBlank()) "Hi, responder" else "Hi, ${state.firstName}",
+                    sub = "Barangay Bagumbayan",
+                    trailing = {
+                        BellButton(unread = state.hasUnread, onClick = { bellOpen = true; onBellOpened() })
                     }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        if (showBatteryItem) {
-                            DropdownMenuItem(
-                                text = { Text("Battery optimization") },
-                                onClick = {
-                                    menuOpen = false
-                                    onBatteryClick()
-                                }
-                            )
+                )
+
+                // ---- "You were assigned" ----
+                val banner = state.banner
+                if (banner != null) {
+                    AssignedBanner(
+                        notice = banner,
+                        onOpen = { onOpenIncident(banner.incidentId) },
+                        onDismiss = { onDismissBanner(banner.id) },
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    )
+                }
+
+                // ---- Counts ----
+                Tiles(state.tiles, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+
+                // ---- Mine / All open / Map ----
+                Segments(
+                    selected = state.tab,
+                    onSelect = onTab,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+
+                // ---- Content ----
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+
+                        state.error != null -> Column(modifier = Modifier.padding(20.dp)) {
+                            ErrorBanner(state.error)
+                            Spacer(Modifier.height(12.dp))
+                            SecondaryButton(text = "Try again", onClick = onRetry)
                         }
-                        ThemeMenuItem(onDone = { menuOpen = false })
-                        DropdownMenuItem(
-                            text = { Text("Sign out") },
-                            onClick = {
-                                menuOpen = false
-                                confirmSignOut = true
-                            }
+
+                        state.tab == DashboardTab.MAP -> MapView(
+                            state = state,
+                            onSelect = onSelect,
+                            onClearSelection = onClearSelection,
+                            onRecenter = onRecenter,
+                            onOpenIncident = onOpenIncident
                         )
+
+                        else -> ListView(state = state, onOpenIncident = onOpenIncident)
                     }
                 }
             }
 
-            // ---- Map / List toggle and the location filter ----
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Map, Board (the list) and History now live in the bottom bar.
-                Spacer(Modifier.weight(1f))
-                DistanceMenu(
-                    selected = state.distanceFilter,
-                    hasPosition = state.origin != null,
-                    isLocating = state.isLocating,
-                    onSelect = onDistanceFilter
-                )
-            }
-
-            // ---- Status filter ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatusFilter.entries.forEach { filter ->
-                    FilterChip(
-                        selected = state.statusFilter == filter,
-                        onClick = { onStatusFilter(filter) },
-                        label = { Text("${filter.label} ${state.counts[filter] ?: 0}") }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // ---- Content ----
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    state.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-
-                    state.error != null -> Column(modifier = Modifier.padding(20.dp)) {
-                        ErrorBanner(state.error)
-                        Spacer(Modifier.height(12.dp))
-                        SecondaryButton(text = "Try again", onClick = onRetry)
-                    }
-
-                    state.tab == DashboardTab.MAP -> MapView(
-                        state = state,
-                        onSelect = onSelect,
-                        onClearSelection = onClearSelection,
-                        onRecenter = onRecenter,
-                        onOpenIncident = onOpenIncident
-                    )
-
-                    else -> ListView(state = state, onOpenIncident = onOpenIncident)
-                }
-            }
-
-            // ---- Bottom bar (from the approved mockup) ----
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                windowInsets = WindowInsets(0, 0, 0, 0)
-            ) {
-                NavigationBarItem(
-                    selected = state.tab == DashboardTab.LIST,
-                    onClick = { onTab(DashboardTab.LIST) },
-                    icon = { Icon(Icons.Filled.Dashboard, contentDescription = null) },
-                    label = { Text("Board") }
-                )
-                NavigationBarItem(
-                    selected = state.tab == DashboardTab.MAP,
-                    onClick = { onTab(DashboardTab.MAP) },
-                    icon = { Icon(Icons.Filled.Map, contentDescription = null) },
-                    label = { Text("Map") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onHistory,
-                    icon = { Icon(Icons.Filled.History, contentDescription = null) },
-                    label = { Text("History") }
-                )
-            }
+            ResponderBottomBar(
+                selected = ResponderTab.DASHBOARD,
+                onDashboard = {},
+                onHistory = onHistory,
+                onProfile = onProfile
+            )
         }
     }
 
-    if (confirmSignOut) {
-        AlertDialog(
-            onDismissRequest = { confirmSignOut = false },
-            title = { Text("Sign out?") },
-            text = { Text("You will need to log in again to see incidents.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmSignOut = false
-                    onSignOut()
-                }) { Text("Sign out") }
-            },
-            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } }
+    if (bellOpen) {
+        NoticesDialog(
+            notices = state.notices,
+            onOpen = { id -> bellOpen = false; onOpenIncident(id) },
+            onClose = { bellOpen = false }
         )
     }
 }
 
-// ---------- Location filter ----------
+// ---------- Header pieces ----------
 
 @Composable
-private fun DistanceMenu(
-    selected: DistanceFilter,
-    hasPosition: Boolean,
-    isLocating: Boolean,
-    onSelect: (DistanceFilter) -> Unit
-) {
-    var open by remember { mutableStateOf(false) }
+private fun BellButton(unread: Boolean, onClick: () -> Unit) {
     Box {
-        FilterChip(
-            selected = selected != DistanceFilter.ANY,
-            onClick = { open = true },
-            label = { Text(if (selected == DistanceFilter.ANY) "Near me" else selected.label) }
-        )
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DistanceFilter.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label) },
-                    // A distance needs the responder's position. "Anywhere" always works.
-                    enabled = option == DistanceFilter.ANY || hasPosition,
-                    onClick = {
-                        open = false
-                        onSelect(option)
-                    }
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.size(48.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 1.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Notifications, contentDescription = "Notices")
+            }
+        }
+        if (unread) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 10.dp)
+                    .size(10.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AssignedBanner(notice: AssignedNotice, onOpen: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onOpen,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = BannerInk
+    ) {
+        Row(modifier = Modifier.padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 4.dp), verticalAlignment = Alignment.Top) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "You were assigned",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    AssignedNoticeRules.text(notice.text, notice.removed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Open report",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
                 )
             }
-            if (!hasPosition) {
-                Text(
-                    text = if (isLocating) "Finding your location…" else "Turn on location to filter by distance.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = Color.White.copy(alpha = 0.8f))
             }
         }
     }
+}
+
+@Composable
+private fun Tiles(tiles: DashboardTiles, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Tile(tiles.open, "Open", Modifier.weight(1f))
+        Tile(tiles.awaitingAdmin, "Awaiting admin", Modifier.weight(1f))
+        Tile(tiles.mine, "Mine", Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun Tile(number: Int, label: String, modifier: Modifier = Modifier) {
+    SoftCard(modifier = modifier) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Text(number.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun Segments(selected: DashboardTab, onSelect: (DashboardTab) -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        DashboardTab.entries.forEach { tab ->
+            val on = tab == selected
+            Surface(
+                onClick = { onSelect(tab) },
+                modifier = Modifier.weight(1f).height(40.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = if (on) MaterialTheme.colorScheme.surface else Color.Transparent,
+                shadowElevation = if (on) 1.dp else 0.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        tab.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (on) FontWeight.ExtraBold else FontWeight.SemiBold,
+                        color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoticesDialog(notices: List<AssignedNotice>, onOpen: (String) -> Unit, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Notices") },
+        text = {
+            if (notices.isEmpty()) {
+                Text("Nothing yet. You will see it here when an administrator assigns you to a report.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    notices.take(8).forEach { n ->
+                        Surface(
+                            onClick = { onOpen(n.incidentId) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Text(
+                                    AssignedNoticeRules.title(n.removed),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    AssignedNoticeRules.text(n.text, n.removed),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                n.createdAtMs?.let {
+                                    Text(
+                                        timeAgoLabel(it, System.currentTimeMillis()),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
+    )
 }
 
 // ---------- Map ----------
@@ -425,7 +474,7 @@ private fun MapView(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (state.groups.isEmpty()) {
-                EmptyNotice(state)
+                EmptyNotice("No active incidents right now.")
             }
             val selected = state.selected
             if (selected != null) {
@@ -435,7 +484,7 @@ private fun MapView(
                     color = MaterialTheme.colorScheme.surface
                 ) {
                     Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                        GroupCard(selected, state.origin, onClick = { onOpenIncident(selected.id) }, bordered = false)
+                        IncidentCard(selected, mine = selected.id in state.mineIds, onClick = { onOpenIncident(selected.id) }, bordered = false)
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.End
@@ -514,31 +563,31 @@ private fun LegendDot(color: Color, label: String, ring: Boolean) {
 
 @Composable
 private fun ListView(state: DashboardUiState, onOpenIncident: (String) -> Unit) {
-    if (state.groups.isEmpty()) {
+    val shown = state.shown
+    if (shown.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            EmptyNotice(state)
+            EmptyNotice(
+                when {
+                    state.total == 0 -> "No active incidents right now."
+                    else -> ResponderDashboardRules.EMPTY_MINE
+                }
+            )
         }
         return
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(state.groups, key = { it.id }) { group ->
-            GroupCard(group, state.origin, onClick = { onOpenIncident(group.id) })
+        items(shown, key = { it.id }) { group ->
+            IncidentCard(group, mine = group.id in state.mineIds, onClick = { onOpenIncident(group.id) })
         }
     }
 }
 
 @Composable
-private fun EmptyNotice(state: DashboardUiState) {
-    // Two different situations, two different messages.
-    val text = when {
-        state.total == 0 -> "No active incidents right now."
-        state.isFiltered -> "No incidents match these filters."
-        else -> "No active incidents right now."
-    }
+private fun EmptyNotice(text: String) {
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Text(
             text = text,
@@ -549,81 +598,90 @@ private fun EmptyNotice(state: DashboardUiState) {
     }
 }
 
+private fun severityTone(severity: Severity): Tone = when (severity) {
+    Severity.CRITICAL, Severity.HIGH -> Tone.RED
+    Severity.MEDIUM -> Tone.AMBER
+    Severity.LOW -> Tone.GREEN
+}
+
 /**
- * One incident group. A flagged report gets an amber outline and a "Flagged" label. Duplicates are
- * summarised in one line instead of being listed as separate cards.
+ * One incident group (round 2): the address as the title, "INC-code · type · time" under it and a row
+ * of pills. A report assigned to this responder has a primary outline and the "ASSIGNED TO YOU" caption.
+ * Duplicates are summarised as one pill instead of being listed as separate cards.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun GroupCard(group: IncidentGroup, origin: LatLon?, onClick: () -> Unit, bordered: Boolean = true) {
+private fun IncidentCard(group: IncidentGroup, mine: Boolean, onClick: () -> Unit, bordered: Boolean = true) {
     val incident = group.primary
+    val status = incident.statusEnum()
+    val severity = incident.severityEnum()
     val sentAt = incident.submittedAt?.toDate()?.time
-    val flaggedBorder = if (group.isFlagged) BorderStroke(2.dp, Amber) else BorderStroke(1.dp, Border)
+    val time = sentAt?.let { timeAgoLabel(it, System.currentTimeMillis()) } ?: ChatRules.SENDING_LABEL
+    val border = when {
+        mine -> androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        bordered -> androidx.compose.foundation.BorderStroke(1.dp, Border)
+        else -> null
+    }
 
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = if (bordered || group.isFlagged) flaggedBorder else null
+        border = border
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (mine) {
                 Text(
-                    text = incident.fireTypeEnum().label,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    "ASSIGNED TO YOU",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.8.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(Modifier.width(8.dp))
-                StatusChip(incident.statusEnum())
-            }
-            if (incident.addressText.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = incident.addressText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
-
-            if (group.isFlagged) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = Amber, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Flagged for review", style = MaterialTheme.typography.labelLarge)
-                }
-            }
-            if (group.duplicates.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                val flagged = group.flaggedDuplicates
-                Text(
-                    text = buildString {
-                        append("+${group.duplicates.size} duplicate report")
-                        if (group.duplicates.size != 1) append("s")
-                        if (flagged > 0) append(" ($flagged flagged)")
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
+            Text(
+                text = incident.addressText.ifBlank { incident.fireTypeEnum().label },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "${incidentCode(incident.id)} · ${incident.fireTypeEnum().label} · $time",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val time = sentAt?.let { timeAgoLabel(it, System.currentTimeMillis()) } ?: ChatRules.SENDING_LABEL
-                val away = origin?.let {
-                    DashboardRules.distanceLabel(DashboardRules.metersFrom(it.latitude, it.longitude, group))
-                }
-                Text(
-                    text = if (away != null) "$time · $away away" else time,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                TonePill(
+                    severity.label, severityTone(severity),
+                    icon = if (severity.rank >= Severity.HIGH.rank) Icons.Filled.Warning else null
                 )
-                SeverityChip(incident.severityEnum())
+                when (status) {
+                    IncidentStatus.REPORTED ->
+                        TonePill("Awaiting admin", Tone.GREY, icon = Icons.Filled.HourglassEmpty)
+                    IncidentStatus.VERIFIED -> TonePill("Verified", Tone.BLUE)
+                    else -> {
+                        StatusChip(status)
+                        if (incident.verification == Verification.VERIFIED.value) TonePill("Verified", Tone.BLUE)
+                    }
+                }
+                if (incident.isDuplicate) TonePill("Possible duplicate", Tone.AMBER)
+                if (group.duplicates.isNotEmpty()) {
+                    TonePill(
+                        "+${group.duplicates.size} duplicate report" + if (group.duplicates.size != 1) "s" else "",
+                        Tone.GREY
+                    )
+                }
+                if (group.isFlagged) TonePill("Flagged", Tone.AMBER, icon = Icons.Filled.Warning)
             }
         }
     }
@@ -648,9 +706,9 @@ private fun sample(
 )
 
 private val previewGroups = listOf(
-    sample("1", FireType.STRUCTURAL, IncidentStatus.ON_SCENE, Severity.CRITICAL, duplicates = 2),
-    sample("2", FireType.ELECTRICAL, IncidentStatus.REPORTED, Severity.HIGH, flagged = true),
-    sample("3", FireType.RUBBISH, IncidentStatus.VERIFIED, Severity.LOW)
+    sample("1abcdef", FireType.STRUCTURAL, IncidentStatus.ON_SCENE, Severity.CRITICAL, duplicates = 2),
+    sample("2abcdef", FireType.ELECTRICAL, IncidentStatus.REPORTED, Severity.HIGH, flagged = true),
+    sample("3abcdef", FireType.RUBBISH, IncidentStatus.VERIFIED, Severity.LOW)
 )
 
 @Composable
@@ -658,39 +716,36 @@ private fun PreviewScreen(state: DashboardUiState) {
     FIRESTheme {
         DashboardContent(
             state = state,
-            onTab = {}, onStatusFilter = {}, onDistanceFilter = {}, onSelect = {}, onClearSelection = {},
-            onRecenter = {}, onRetry = {}, onOpenIncident = {}, onHistory = {}, onSignOut = {}
+            onTab = {}, onSelect = {}, onClearSelection = {},
+            onRecenter = {}, onRetry = {}, onOpenIncident = {}, onHistory = {}, onProfile = {}
         )
     }
 }
 
-private val previewCounts = mapOf(
-    StatusFilter.ACTIVE to 3, StatusFilter.REPORTED to 1, StatusFilter.VERIFIED to 1,
-    StatusFilter.DISPATCHED to 0, StatusFilter.ON_SCENE to 1
+@Preview(name = "Dashboard - mine", showSystemUi = true)
+@Composable
+private fun DashboardMinePreview() = PreviewScreen(
+    DashboardUiState(
+        groups = previewGroups, mine = listOf(previewGroups[0]),
+        tiles = DashboardTiles(3, 1, 1), firstName = "Juan",
+        banner = AssignedNotice("n", "1abcdef", null, System.currentTimeMillis(), false),
+        hasUnread = true, isLoading = false
+    )
 )
 
-@Preview(name = "Dashboard - list", showSystemUi = true)
+@Preview(name = "Dashboard - all open", showSystemUi = true)
 @Composable
-private fun DashboardListPreview() = PreviewScreen(
+private fun DashboardAllPreview() = PreviewScreen(
     DashboardUiState(
-        groups = previewGroups, counts = previewCounts, total = 3,
-        tab = DashboardTab.LIST, origin = LatLon(14.6000, 120.9800), isLoading = false
+        groups = previewGroups, tiles = DashboardTiles(3, 1, 0), tab = DashboardTab.ALL,
+        origin = LatLon(14.6000, 120.9800), isLoading = false
     )
 )
 
 @Preview(name = "Dashboard - map", showSystemUi = true)
 @Composable
 private fun DashboardMapPreview() = PreviewScreen(
-    DashboardUiState(groups = previewGroups, counts = previewCounts, total = 3, isLoading = false)
-)
-
-@Preview(name = "Dashboard - nothing matches", showSystemUi = true)
-@Composable
-private fun DashboardNoMatchPreview() = PreviewScreen(
-    DashboardUiState(
-        counts = previewCounts, total = 3, tab = DashboardTab.LIST,
-        statusFilter = StatusFilter.DISPATCHED, isLoading = false
-    )
+    DashboardUiState(groups = previewGroups, tiles = DashboardTiles(3, 1, 0), tab = DashboardTab.MAP, isLoading = false)
 )
 
 @Preview(name = "Dashboard - error", showSystemUi = true)

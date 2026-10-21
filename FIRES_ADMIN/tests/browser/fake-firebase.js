@@ -79,6 +79,7 @@ const apply = (op, path, data) => {
 };
 export const setDoc = async (ref, data) => { guard(); apply("set", ref.path, data); fake.emit(); };
 export const updateDoc = async (ref, data) => { guard(); apply("update", ref.path, data); fake.emit(); };
+export const deleteDoc = async ref => { guard(); calls.push({ op: "delete", path: ref.path }); delete store[ref.path]; fake.emit(); };
 export const runTransaction = async (_d, fn) => {
   const pending = [];
   const tx = { get: ref => getDoc(ref), update: (ref, data) => { pending.push([ref.path, data]); return tx; } };

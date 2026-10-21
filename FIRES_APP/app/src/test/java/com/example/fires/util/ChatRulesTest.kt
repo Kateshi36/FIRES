@@ -56,4 +56,25 @@ class ChatRulesTest {
     }
 
     @Test fun blankSenderName_getsAFallback() = assertEquals("Unknown", item(name = " ").senderName)
+
+    @Test fun clock_and_day_labels() {
+        val utc = java.time.ZoneId.of("UTC")
+        fun ms(d: Int, h: Int) = java.time.ZonedDateTime.of(2026, 10, d, h, 5, 0, 0, utc).toInstant().toEpochMilli()
+        assertEquals("9:05 PM", ChatRules.clockLabel(ms(22, 21), utc))
+        assertEquals("Today", ChatRules.dayLabel(ms(22, 1), ms(22, 23), utc))
+        assertEquals("Yesterday", ChatRules.dayLabel(ms(21, 23), ms(22, 1), utc))
+        assertEquals("Oct 9", ChatRules.dayLabel(ms(9, 12), ms(22, 12), utc))
+    }
+
+    @Test fun the_header_names_the_other_side() {
+        val mine = ChatItem("1", "hi", "Me", true, false, "x", false)
+        val theirs = ChatItem("2", "hello", "Responder Reyes", false, true, "x", false)
+        assertEquals("Responder Reyes", ChatRules.otherParty(listOf(mine, theirs), ChatRules.RESPONDERS_NAME))
+        assertEquals("Responders", ChatRules.otherParty(listOf(mine), ChatRules.RESPONDERS_NAME))
+    }
+
+    @Test fun there_are_three_quick_replies_and_all_fit_the_limit() {
+        assertEquals(3, ChatRules.QUICK_REPLIES.size)
+        assertTrue(ChatRules.QUICK_REPLIES.all { ChatRules.canSend(it) && it.length <= ChatRules.MAX_LENGTH })
+    }
 }

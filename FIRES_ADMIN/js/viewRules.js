@@ -158,6 +158,7 @@ const KIND = {
   false: { icon: "✖", tone: "neu", cats: ["report", "admin"] },
   duplicate: { icon: "⧉", tone: "neu", cats: ["report", "admin"] },
   assign: { icon: "👤", tone: "info", cats: ["assign", "admin"] },
+  unassign: { icon: "👤", tone: "neu", cats: ["assign", "admin"] },
   role: { icon: "🔑", tone: "md", cats: ["account", "admin"] },
   create: { icon: "🔑", tone: "md", cats: ["account", "admin"] }
 };
