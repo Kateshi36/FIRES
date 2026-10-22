@@ -11,6 +11,7 @@ import com.example.fires.data.model.statusEnum
 import com.example.fires.data.repository.IncidentRepository
 import com.example.fires.ui.citizen.CitizenBottomBar
 import com.example.fires.ui.citizen.CitizenTab
+import com.example.fires.ui.citizen.NotificationsScreen
 import com.example.fires.ui.citizen.ProfileScreen
 import com.example.fires.util.attempt
 import kotlinx.coroutines.launch
@@ -347,7 +348,7 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             composable(Routes.CITIZEN_HOME) {
                 HomeScreen(
                     onSosClick = { goOnce(Routes.REPORT) },
-                    onSignOut = { signOut() },
+                    onNotifications = { goOnce(Routes.NOTIFICATIONS) },
                     bottomBar = { citizenBar(CitizenTab.HOME) }
                 )
             }
@@ -394,6 +395,12 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
                 MyReportsScreen(
                     onOpen = { incidentId -> goOnce(Routes.status(incidentId)) },
                     bottomBar = { citizenBar(CitizenTab.REPORTS) }
+                )
+            }
+            composable(Routes.NOTIFICATIONS) {
+                NotificationsScreen(
+                    onBack = { back() },
+                    onOpen = { incidentId -> goOnce(Routes.status(incidentId)) }
                 )
             }
             composable(Routes.PROFILE) {

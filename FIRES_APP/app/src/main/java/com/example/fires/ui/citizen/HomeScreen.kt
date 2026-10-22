@@ -1,10 +1,10 @@
 package com.example.fires.ui.citizen
 
-import com.example.fires.ui.theme.ThemeMenuItem
 import com.example.fires.ui.theme.Ember
 import com.example.fires.ui.theme.FireRedSoft
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Description
@@ -35,18 +35,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,7 +81,7 @@ import com.example.fires.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     onSosClick: () -> Unit,
-    onSignOut: () -> Unit,
+    onNotifications: () -> Unit,
     bottomBar: @Composable () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -105,7 +100,7 @@ fun HomeScreen(
         location = location,
         onRecenter = { viewModel.refreshLocation(context) },
         onSosClick = onSosClick,
-        onSignOut = onSignOut,
+        onNotifications = onNotifications,
         bottomBar = bottomBar
     )
 }
@@ -117,12 +112,9 @@ fun HomeContent(
     location: LocationAccess,
     onRecenter: () -> Unit,
     onSosClick: () -> Unit,
-    onSignOut: () -> Unit,
+    onNotifications: () -> Unit,
     bottomBar: @Composable () -> Unit = {}
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
-    var confirmSignOut by remember { mutableStateOf(false) }
-
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
 
@@ -142,20 +134,9 @@ fun HomeContent(
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.weight(1f)
                 )
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        ThemeMenuItem(onDone = { menuOpen = false })
-                        DropdownMenuItem(
-                            text = { Text("Sign out") },
-                            onClick = {
-                                menuOpen = false
-                                confirmSignOut = true
-                            }
-                        )
-                    }
+                // The bell opens the list of updates on my reports. Theme and Sign out live on Profile.
+                IconButton(onClick = onNotifications) {
+                    Icon(Icons.Filled.Notifications, contentDescription = "Notifications")
                 }
             }
 
@@ -238,23 +219,6 @@ fun HomeContent(
             // ---- Bottom bar: Home, My reports, Chat, Profile (round 2) ----
             bottomBar()
         }
-    }
-
-    if (confirmSignOut) {
-        AlertDialog(
-            onDismissRequest = { confirmSignOut = false },
-            title = { Text("Sign out?") },
-            text = { Text("You will need to log in again to report a fire.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmSignOut = false
-                    onSignOut()
-                }) { Text("Sign out") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") }
-            }
-        )
     }
 }
 

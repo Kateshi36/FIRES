@@ -24,6 +24,7 @@ import com.example.fires.ui.common.LatLon
 import com.example.fires.util.AddressLookup
 import com.example.fires.util.GpsFix
 import com.example.fires.util.PhotoProcessor
+import com.example.fires.util.PhotoRules
 import com.example.fires.util.ReportChecks
 import com.example.fires.util.ReportValidators
 import com.example.fires.util.SeverityCalculator

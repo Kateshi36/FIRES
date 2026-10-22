@@ -25,6 +25,7 @@ object Routes {
     const val STATUS = "status/{$ARG_INCIDENT_ID}"
     fun status(incidentId: String) = "status/$incidentId"
     const val MY_REPORTS = "my_reports"
+    const val NOTIFICATIONS = "notifications"
     const val PROFILE = "profile"
 
     // Responder area

@@ -4,7 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
