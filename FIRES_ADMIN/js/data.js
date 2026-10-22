@@ -12,7 +12,7 @@ import { ROLE_CHANGES, canChange } from "./roleRules.js";
 import { isVerifyKind, canVerify, buildVerifyUpdate, patchIncident } from "./verifyRules.js";
 import { isAssignmentPayload, sameAssignment, buildAssignment, addAssignment } from "./assignRules.js";
 import {
-  mapUser, mapIncident, applyRecord, mapAssignment, mapMessage, photoDataUrl, toMs, esc
+  mapUser, mapIncident, applyRecord, mapAssignment, mapMessage, photoDataUrl, toMs, esc, mapPhotoAi
 } from "./mapping.js";
 
 export const U = [];
@@ -26,7 +26,7 @@ export const fl = i => (i.isSuspicious ? '<span class="pill flag">Suspicious</sp
 export const photoBlock = i =>
   i.photoUrl ? `<img class="ph" src="${i.photoUrl}" alt="Photo submitted by the reporter for ${i.code}" data-id="${i.id}">`
   : i.photo ? `<span class="muted">${i.detailState === "error" ? "Photo could not be loaded." : "Loading photo..."}</span>`
-  : `<span class="muted">No photo attached. Photos are optional.</span>`;
+  : `<span class="muted">No photo attached.</span>`;
 
 // ---- caches (kept across snapshots so we do not re-read what has not changed) ----
 const recordCache = new Map();   // incidentId -> record data (a resolved incident's record is final)
@@ -138,6 +138,34 @@ export async function loadAssignmentsFor(list) {
     } catch (e) { console.warn("assignments read failed", i.id, e); }
   }));
   return true;
+}
+
+// The photo as a data URL (cached). Used by the AI photo check.
+export async function getPhotoUrl(i) {
+  if (!i.photo) return null;
+  if (photoCache.has(i.id)) return photoCache.get(i.id);
+  const s = await getDoc(doc(db, "incident_photos", i.id));
+  const url = s.exists() ? photoDataUrl(s.data()) : null;
+  if (url) { photoCache.set(i.id, url); i.photoUrl = url; }
+  return url;
+}
+
+// Saves the AI photo answer on the incident: exactly the six ai* fields, ONCE. If the incident already
+// has an answer (another administrator was faster), nothing is written and { stale: true } comes back.
+// Rules allow this for staff only, only these fields, and never over an existing answer.
+export async function saveAiPhoto(id, fields, local = I.find(i => i.id === id)) {
+  if (!id || !fields) return { blocked: true };
+  const ref = doc(db, "incidents", id);
+  const out = await runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return { stale: true };
+    const d = snap.data();
+    if (d.aiFireDetected != null || d.aiSeverity != null) return { stale: true };
+    tx.update(ref, fields);
+    return { ok: true };
+  });
+  if (out.ok && local) local.photoAi = mapPhotoAi(fields);
+  return out;
 }
 
 // Everything the drawer needs for ONE incident: photo, assignments, messages, record.

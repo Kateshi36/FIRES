@@ -45,9 +45,9 @@ test("no chat: the website never writes or even reads the messages collection fo
   assert.equal(/"messages"[^)]*\)\s*,\s*\{/.test(code["js/data.js"].replace(/getDocs\([^)]*\)/g, "")), false);
 });
 
-test("every write call is one of the five known ones", () => {
+test("every write call is one of the six known ones", () => {
   const calls = [...all.matchAll(/\b(tx\.update|tx\.set|tx\.delete|setDoc|updateDoc)\(/g)].map(m => m[1]).sort();
-  assert.deepEqual(calls, ["setDoc", "setDoc", "setDoc", "setDoc", "tx.update", "updateDoc"]);   // assignment, profile, activity log line, verify, role
+  assert.deepEqual(calls, ["setDoc", "setDoc", "setDoc", "setDoc", "tx.update", "tx.update", "updateDoc"]);   // assignment, profile, activity log line, verify + AI photo answer (both tx.update), role
 });
 
 test("the activity log is the only new collection written, and only through logActivity", () => {

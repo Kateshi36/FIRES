@@ -60,4 +60,14 @@ class ReportValidatorsTest {
         assertEquals(ReportValidators.MSG_LOCATION_MISSING, errors.location)
         assertTrue(errors.hasErrors)
     }
+
+    @Test
+    fun photoIsRequired() {
+        val missing = ReportValidators.validate(FireType.VEHICLE, goodText, FireSize.LARGE, hasLocation = true, hasPhoto = false)
+        assertEquals(ReportValidators.MSG_PHOTO_MISSING, missing.photo)
+        assertTrue(missing.hasErrors)
+        val ok = ReportValidators.validate(FireType.VEHICLE, goodText, FireSize.LARGE, hasLocation = true, hasPhoto = true)
+        assertNull(ok.photo)
+        assertFalse(ok.hasErrors)
+    }
 }

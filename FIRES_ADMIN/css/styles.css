@@ -340,3 +340,55 @@ aside nav button{padding:0 12px}
 .hint:empty{display:none}
 .btn{box-sizing:border-box}
 .feed{gap:0}.feed .phead{padding:12px 0 6px}
+
+/* ---- Phone and small tablet layout (kept last on purpose: it has the final word) ----
+   The sidebar becomes a slim top bar: logo on the left, dark-mode and log-out on the right, and the
+   six sections in one row that scrolls sideways. Nothing on the page should ever scroll sideways
+   except a wide table inside its own box. */
+@media(max-width:860px){
+  html,body{overflow-x:hidden}
+  .app{display:block;min-height:0}
+  aside{position:sticky;top:0;z-index:3;width:auto;height:auto;box-sizing:border-box;padding:10px 12px 8px;gap:6px 10px;
+    border-right:0;border-bottom:1px solid var(--line);
+    display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"brand theme me" "nav nav nav";align-items:center}
+  aside .brand{grid-area:brand;padding:0;min-width:0}
+  aside .brand img{width:32px;height:32px}
+  aside .sub{display:block;font-size:11px}
+  aside .logo{width:auto;font-size:15px}
+  aside .themebtn{grid-area:theme;margin:0;width:44px;min-width:44px;height:44px;padding:0;justify-content:center;gap:0}
+  aside .themebtn .tl{display:none}
+  aside .me{grid-area:me;display:flex;margin:0;padding:0;border:0}
+  aside .me .av,aside .meinfo b,aside .meinfo span{display:none}
+  aside .linkbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;margin:0;font-size:13px}
+  aside nav,aside .brand+nav{grid-area:nav;display:flex;flex-direction:row;flex-wrap:nowrap;gap:6px;overflow-x:auto;overflow-y:hidden;
+    margin:0 -12px;padding:0 12px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  aside nav::-webkit-scrollbar{display:none}
+  aside nav button{flex:none;min-height:40px;padding:0 14px;white-space:nowrap;gap:8px}
+  main{padding:16px 14px 28px;gap:16px}
+  .content{min-width:0}
+  h1{font-size:22px}
+  .ph2{gap:10px}
+  .hact{width:100%}
+  .kpis{grid-template-columns:1fr 1fr;gap:10px}
+  .kpi{min-width:0}
+  .kb{font-size:28px}
+  .kn,.kl{overflow-wrap:anywhere}
+  .split{flex-direction:column;align-items:stretch}
+  .split>.grow2,.split>.grow1{flex:1 1 auto;width:100%;min-width:0}
+  .panel{min-width:0}
+  .g4{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}
+  .bar2{gap:8px}
+  .bar2>.search{flex:1 1 100%}
+  .bar2>.selbtn{flex:1 1 calc(50% - 8px)}
+  .chips{flex-wrap:wrap}
+  .wrap,.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  .drawer{width:100%;border-radius:0;border-left:0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+  .dlg{padding:12px}
+  #lmap{height:340px}
+  .toast{max-width:calc(100% - 24px);text-align:center}
+}
+@media(max-width:420px){
+  .kpis{grid-template-columns:1fr}
+  .kb{font-size:26px}
+  .phead{flex-wrap:wrap}
+}

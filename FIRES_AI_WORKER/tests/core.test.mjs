@@ -84,3 +84,41 @@ test("limiter allows the maximum, then blocks until the window passes", () => {
   assert.ok(ok("u", 0)); assert.ok(ok("u", 10)); assert.ok(!ok("u", 20));
   assert.ok(ok("v", 20)); assert.ok(ok("u", 1500));
 });
+
+// ---- photo check ----
+import { PHOTO_PROMPT, PHOTO_PROMPT_VERSION, sanitizePhotoRequest, parsePhotoAnswer } from "../src/core.js";
+import { readFileSync, existsSync } from "node:fs";
+
+const photoJson = (o = {}) => JSON.stringify({ fireDetected: "yes", smokeOnly: false, severity: "high", confidence: 0.85, reason: "Flames on a roof.", ...o });
+
+test("photo request: only a real image type and clean base64 pass", () => {
+  assert.deepEqual(sanitizePhotoRequest({ mimeType: "image/jpeg", base64: "QUJD\n" }), { mimeType: "image/jpeg", base64: "QUJD" });
+  assert.equal(sanitizePhotoRequest({ mimeType: "text/html", base64: "QUJD" }), null);
+  assert.equal(sanitizePhotoRequest({ mimeType: "image/jpeg", base64: "QU<JD" }), null);
+  assert.equal(sanitizePhotoRequest({ mimeType: "image/jpeg", base64: "" }), null);
+  assert.equal(sanitizePhotoRequest({ mimeType: "image/jpeg", base64: "A".repeat(2_000_001) }), null);
+  assert.equal(sanitizePhotoRequest(null), null);
+});
+
+test("photo answer: valid, no-fire forces none, fire with none rejected, clamps", () => {
+  assert.equal(parsePhotoAnswer(photoJson()).severity, "high");
+  assert.equal(parsePhotoAnswer(photoJson({ fireDetected: "no", severity: "high" })).severity, "none");
+  assert.equal(parsePhotoAnswer(photoJson({ severity: "none" })), null);
+  assert.equal(parsePhotoAnswer(photoJson({ confidence: 7 })).confidence, 1);
+  assert.equal(parsePhotoAnswer(photoJson({ fireDetected: "maybe" })), null);
+  assert.equal(parsePhotoAnswer(photoJson({ reason: "" })), null);
+  assert.equal(parsePhotoAnswer("```json\n" + photoJson() + "\n```").fireDetected, "yes");
+  assert.equal(parsePhotoAnswer("nope"), null);
+  assert.equal(PHOTO_PROMPT_VERSION, "v2");
+  assert.equal(parsePhotoAnswer(photoJson({ aiGenerated: "YES" })).aiGenerated, "yes");
+  assert.equal(parsePhotoAnswer(photoJson()).aiGenerated, "unsure");
+  assert.equal(parsePhotoAnswer(photoJson({ aiGenerated: "maybe" })).aiGenerated, "unsure");
+});
+
+test("the photo prompt here is the same text as the app's copy (when the app is next to it)", () => {
+  const kt = new URL("../../FIRES_APP/app/src/main/java/com/example/fires/util/PhotoAiRules.kt", import.meta.url);
+  if (!existsSync(kt)) return;
+  const m = readFileSync(kt, "utf8").match(/\/\/ PROMPT-BEGIN\s*const val PROMPT = """([\s\S]*?)"""\s*\/\/ PROMPT-END/);
+  assert.ok(m, "markers found");
+  assert.equal(m[1], PHOTO_PROMPT);
+});

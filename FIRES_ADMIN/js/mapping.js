@@ -57,6 +57,21 @@ export function mapUser(id, d) {
 }
 
 // extra = { record, assignments } taken from the caches; either may be missing.
+// The AI's photo advice saved by the app. Read-only here: the website never calls the AI for photos.
+const AI_DETECTED = ["yes", "no", "unsure"], AI_LEVELS = ["none", "low", "medium", "high", "critical"];
+export function mapPhotoAi(d) {
+  if (!AI_DETECTED.includes(d.aiFireDetected)) return null;
+  const level = AI_LEVELS.includes(d.aiSeverity) ? d.aiSeverity : "none";
+  const c = Number(d.aiConfidence);
+  return {
+    fire: d.aiFireDetected, severity: level,
+    confidence: Number.isFinite(c) ? Math.min(1, Math.max(0, c)) : 0,
+    reason: String(d.aiReason ?? "").slice(0, 200),
+    generated: AI_DETECTED.includes(d.aiGenerated) ? d.aiGenerated : null,   // "yes": may be AI-generated or edited
+    version: String(d.aiPromptVersion ?? "").slice(0, 20), model: String(d.aiModel ?? "").slice(0, 60)
+  };
+}
+
 export function mapIncident(id, d, extra = {}) {
   const lat = Number(d.latitude), lng = Number(d.longitude);
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
@@ -82,6 +97,7 @@ export function mapIncident(id, d, extra = {}) {
     isSuspicious: d.isSuspicious === true,
     photo: d.hasPhoto === true,           // true when a photo exists; the image itself loads in the drawer
     photoUrl: null,
+    photoAi: mapPhotoAi(d),               // the app's AI photo advice (read-only), or null
     submittedMs, updatedMs,
     submittedAt: fmtPH(submittedMs),
     dateResolved: null, resolvedMs: null, resolvedBy: "", remarks: "",

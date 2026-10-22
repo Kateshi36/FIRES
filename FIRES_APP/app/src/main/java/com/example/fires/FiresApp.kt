@@ -36,6 +36,7 @@ class FiresApp : Application() {
 
         // Responder alert notification channels (F1.4). Safe to run on every start.
         AlertChannels.createAll(this)
+
     }
 
     private fun buildUserAgent(): String {

@@ -83,6 +83,19 @@ service cloud.firestore {
       return v in ['low', 'medium', 'high', 'critical'];
     }
 
+    // The AI photo advice saved on an incident (Phase AI). Every field may be missing or null.
+    // It is ADVICE only: nothing in the app or the rules depends on it being true.
+    function validAiFields(d) {
+      return (d.get('aiFireDetected', null) == null || d.get('aiFireDetected', null) in ['yes', 'no', 'unsure'])
+        && (d.get('aiSeverity', null) == null || d.get('aiSeverity', null) in ['none', 'low', 'medium', 'high', 'critical'])
+        && (d.get('aiConfidence', null) == null
+            || (d.get('aiConfidence', null) is number && d.get('aiConfidence', null) >= 0 && d.get('aiConfidence', null) <= 1))
+        && (d.get('aiReason', null) == null || (d.get('aiReason', null) is string && d.get('aiReason', null).size() <= 200))
+        && (d.get('aiPromptVersion', null) == null || (d.get('aiPromptVersion', null) is string && d.get('aiPromptVersion', null).size() <= 20))
+        && (d.get('aiModel', null) == null || (d.get('aiModel', null) is string && d.get('aiModel', null).size() <= 60))
+        && (d.get('aiGenerated', null) == null || d.get('aiGenerated', null) in ['yes', 'no', 'unsure']);
+    }
+
     // =====================================================================
     // users/{uid}
     // =====================================================================
@@ -171,7 +184,9 @@ service cloud.firestore {
             'latitude', 'longitude', 'locationSource', 'addressText', 'fireSize',
             'peopleAtRisk', 'vulnerablePersons', 'trapped', 'hazards', 'hasPhoto',
             'status', 'verification', 'severity', 'severitySource',
-            'isDuplicate', 'duplicateOf', 'isSuspicious', 'submittedAt', 'updatedAt'])
+            'isDuplicate', 'duplicateOf', 'isSuspicious', 'submittedAt', 'updatedAt',
+            'aiFireDetected', 'aiSeverity', 'aiConfidence', 'aiReason', 'aiPromptVersion', 'aiModel',
+            'aiGenerated'])
           && d.keys().hasAll([
             'reporterId', 'fireType', 'description', 'latitude', 'longitude',
             'fireSize', 'status', 'verification', 'severity', 'severitySource',
@@ -199,6 +214,11 @@ service cloud.firestore {
           && isText(d.get('reporterName', ''), 100)
           && isText(d.get('reporterContact', ''), 30)
           && isText(d.get('addressText', ''), 300)
+          // A citizen cannot write AI advice: it is added later, once, by an administrator.
+          && d.get('aiFireDetected', null) == null && d.get('aiSeverity', null) == null
+          && d.get('aiConfidence', null) == null && d.get('aiReason', null) == null
+          && d.get('aiPromptVersion', null) == null && d.get('aiModel', null) == null
+          && d.get('aiGenerated', null) == null
           // Times are the server's, so a phone with a wrong clock cannot fake them.
           && d.submittedAt == request.time
           && d.updatedAt == request.time;
@@ -223,6 +243,17 @@ service cloud.firestore {
             || (request.resource.data.verification == resource.data.verification
                 && resource.data.verification == 'verified'
                 && request.resource.data.status != 'dismissed'));
+
+      // The AI photo advice is added ONCE by an administrator (the website sends the photo to the AI
+      // helper and saves the answer), and never changed afterwards. It touches only the six ai fields,
+      // so status and times stay as they are.
+      allow update: if isAdmin()
+        && changesOnly(['aiFireDetected', 'aiSeverity', 'aiConfidence', 'aiReason',
+                        'aiPromptVersion', 'aiModel', 'aiGenerated'])
+        && resource.data.get('aiSeverity', null) == null
+        && resource.data.get('aiFireDetected', null) == null
+        && request.resource.data.get('aiFireDetected', null) != null
+        && validAiFields(request.resource.data);
 
       // No deletes from the app.
 

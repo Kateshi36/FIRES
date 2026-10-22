@@ -61,3 +61,13 @@ MEASURING IT FOR CHAPTER 4
 TESTS
   node --test tests\*.test.mjs        (in FIRES_AI_WORKER)
   node --test tests\*.test.mjs        (in FIRES_ADMIN)
+
+
+PHOTO CHECK (Phase AI)
+----------------------
+The same Worker also answers POST /photo. The admin website sends ONE report photo (mimeType + base64),
+the Worker asks Gemini with the fixed photo prompt (version v1) and returns
+{fireDetected, smokeOnly, severity, confidence, reason, promptVersion, model}. The website saves the six
+ai* fields on the incident once. Same rules as /suggest: administrators only, 12 photo checks a minute per
+person, nothing is written by the Worker. After changing worker.js or core.js run:  npx wrangler deploy
+No new secret is needed (the same GEMINI_API_KEY is used).

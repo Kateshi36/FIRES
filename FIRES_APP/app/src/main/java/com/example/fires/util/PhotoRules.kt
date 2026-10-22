@@ -20,7 +20,8 @@ object PhotoRules {
 
     const val MSG_NOT_IMAGE = "That file isn't a photo we can read. Choose another one."
     const val MSG_BAD_TYPE = "Only JPEG, PNG or WebP photos are supported."
-    const val MSG_TOO_LARGE = "That photo is too large (over 10 MB). Choose a smaller one."
+    const val MSG_TOO_LARGE = "That photo is too large (over 10 MB). Try the camera at a lower resolution."
+    const val MSG_NO_CAMERA = "No camera app was found. Turn on a camera app to take the photo."
     const val MSG_FAILED = "We couldn't prepare that photo. Try another one."
 
     /** One try at shrinking: scale the photo so its longest side is [maxSide], save at JPEG [quality]. */

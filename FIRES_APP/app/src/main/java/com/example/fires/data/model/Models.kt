@@ -61,7 +61,16 @@ data class Incident(
     var isSuspicious: Boolean = false,
 
     @ServerTimestamp var submittedAt: Timestamp? = null,
-    @ServerTimestamp var updatedAt: Timestamp? = null
+    @ServerTimestamp var updatedAt: Timestamp? = null,
+
+    // AI advice about the photo (Phase AI). All null until the AI has answered. Advice only.
+    var aiFireDetected: String? = null,   // "yes", "no" or "unsure"
+    var aiSeverity: String? = null,       // "none", "low", "medium", "high" or "critical"
+    var aiConfidence: Double? = null,     // 0.0 to 1.0
+    var aiReason: String? = null,         // one sentence
+    var aiPromptVersion: String? = null,  // for example "v1"
+    var aiModel: String? = null,
+    var aiGenerated: String? = null       // "yes", "no" or "unsure": does the photo look AI-generated or edited
 )
 
 /** Photo stored as compressed Base64. Document id == incident id. */

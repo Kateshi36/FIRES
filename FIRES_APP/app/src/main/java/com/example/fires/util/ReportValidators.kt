@@ -7,7 +7,7 @@ import com.example.fires.data.model.FireType
  * Required-field rules for the report form (D2). Pure Kotlin, so it runs as a plain JVM test.
  * Every check returns null when fine, or the message to show under the field.
  *
- * Required: type of fire, description, fire size, and a location (GPS or pin).
+ * Required: type of fire, description, fire size, a photo, and a location (GPS or pin).
  * Optional: people at risk (defaults to 0), vulnerable persons, trapped, hazards.
  */
 object ReportValidators {
@@ -20,16 +20,19 @@ object ReportValidators {
     const val MSG_DESCRIPTION_BLANK = "Describe what is burning and what you see."
     const val MSG_DESCRIPTION_SHORT = "Add a little more detail (at least $MIN_DESCRIPTION characters)."
     const val MSG_SIZE_MISSING = "Choose how big the fire is."
+    const val MSG_PHOTO_MISSING = "Add a photo of the fire. It helps the responders and the administrator."
     const val MSG_LOCATION_MISSING = "Set where the fire is. Use your GPS or move the pin on the map."
 
     data class ReportErrors(
         val fireType: String? = null,
         val description: String? = null,
         val fireSize: String? = null,
-        val location: String? = null
+        val location: String? = null,
+        val photo: String? = null
     ) {
         val hasErrors: Boolean
-            get() = fireType != null || description != null || fireSize != null || location != null
+            get() = fireType != null || description != null || fireSize != null || location != null ||
+                photo != null
     }
 
     fun fireType(value: FireType?): String? = if (value == null) MSG_TYPE_MISSING else null
@@ -47,15 +50,19 @@ object ReportValidators {
 
     fun location(hasLocation: Boolean): String? = if (hasLocation) null else MSG_LOCATION_MISSING
 
+    fun photo(hasPhoto: Boolean): String? = if (hasPhoto) null else MSG_PHOTO_MISSING
+
     fun validate(
         fireType: FireType?,
         description: String,
         fireSize: FireSize?,
-        hasLocation: Boolean
+        hasLocation: Boolean,
+        hasPhoto: Boolean = true
     ) = ReportErrors(
         fireType = fireType(fireType),
         description = description(description),
         fireSize = fireSize(fireSize),
-        location = location(hasLocation)
+        location = location(hasLocation),
+        photo = photo(hasPhoto)
     )
 }

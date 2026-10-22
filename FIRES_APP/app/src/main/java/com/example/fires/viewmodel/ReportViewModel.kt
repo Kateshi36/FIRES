@@ -53,7 +53,7 @@ data class ReportUiState(
     val trapped: Boolean = false,
     val hazards: Set<HazardType> = emptySet(),
 
-    /** The optional photo, already shrunk and compressed (about 200 KB at most). */
+    /** The photo (required), already shrunk and compressed (about 200 KB at most). */
     val photo: IncidentPhoto? = null,
     val isProcessingPhoto: Boolean = false,
     /** Why the last picked photo was refused. The previous photo, if any, is kept. */
@@ -159,6 +159,8 @@ class ReportViewModel(
         }
     }
 
+    fun onCameraUnavailable() = _state.update { it.copy(photoError = PhotoRules.MSG_NO_CAMERA) }
+
     fun onPhotoRemove() = _state.update { it.copy(photo = null, photoError = null) }
 
     /**
@@ -238,7 +240,8 @@ class ReportViewModel(
             fireType = s.fireType,
             description = s.description,
             fireSize = s.fireSize,
-            hasLocation = s.location != null
+            hasLocation = s.location != null,
+            hasPhoto = s.photo != null
         )
         _state.update { it.copy(errors = errors, showFormError = errors.hasErrors, submitError = null) }
         if (errors.hasErrors) return

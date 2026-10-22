@@ -1,7 +1,12 @@
 package com.example.fires.ui.citizen
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
+import android.net.Uri
+import androidx.core.content.FileProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberSaveable
+import androidx.compose.runtime.setValue
+import java.io.File
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -72,6 +77,7 @@ import com.example.fires.ui.common.SecondaryButton
 import com.example.fires.ui.common.rememberLocationAccess
 import com.example.fires.ui.theme.FIRESTheme
 import com.example.fires.util.LocationGate
+import com.example.fires.util.PhotoAiRules
 import com.example.fires.util.PhotoProcessor
 import com.example.fires.util.PhotoRules
 import com.example.fires.util.ReportValidators
@@ -107,9 +113,14 @@ fun ReportScreen(
         if (gpsReady) viewModel.useGps(context, force = false)
     }
 
-    // The system photo picker: no permission needed, shows only images.
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) viewModel.onPhotoPicked(context, uri)
+    // The photo is taken NOW with the phone's camera app (no gallery), so an old, downloaded or
+    // generated picture cannot be attached. The system camera needs no permission. The picture goes
+    // to a temporary file that only this app can share (FileProvider).
+    var pendingPhoto by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val uri = pendingPhoto
+        pendingPhoto = null
+        if (saved && uri != null) viewModel.onPhotoPicked(context, uri)
     }
 
     LaunchedEffect(viewModel) {
@@ -133,7 +144,17 @@ fun ReportScreen(
         onHazardToggle = viewModel::onHazardToggle,
         onAddressChange = viewModel::onAddressChange,
         onAddPhoto = {
-            photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            try {
+                val folder = File(context.cacheDir, "photos").apply { mkdirs() }
+                val uri = FileProvider.getUriForFile(
+                    context, context.packageName + ".fileprovider", File.createTempFile("report_", ".jpg", folder)
+                )
+                pendingPhoto = uri
+                takePicture.launch(uri)
+            } catch (_: Exception) {
+                pendingPhoto = null
+                viewModel.onCameraUnavailable()
+            }
         },
         onRemovePhoto = viewModel::onPhotoRemove,
         onUseGps = { viewModel.useGps(context, force = true) },
@@ -276,7 +297,7 @@ fun ReportContent(
                 )
                 Spacer(Modifier.height(24.dp))
 
-                // ---- Photo (optional) ----
+                // ---- Photo (required) ----
                 PhotoSection(state = state, onAddPhoto = onAddPhoto, onRemovePhoto = onRemovePhoto)
                 Spacer(Modifier.height(24.dp))
 
@@ -317,10 +338,11 @@ private fun PhotoSection(
     onAddPhoto: () -> Unit,
     onRemovePhoto: () -> Unit
 ) {
-    SectionTitle("Photo (optional)")
+    SectionTitle("Photo")
     Text(
-        "A photo helps responders see what is happening. JPEG, PNG or WebP, up to " +
-            "${PhotoRules.MAX_SOURCE_BYTES / (1024 * 1024)} MB. We shrink it to save data.",
+        "Take a photo of the fire now, so the responders and the administrator can see what is " +
+            "happening. Photos from the gallery are not accepted. We shrink it to save data. " +
+            PhotoAiRules.CONSENT,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -343,14 +365,15 @@ private fun PhotoSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f).padding(start = 4.dp)
                 )
-                TextButton(onClick = onAddPhoto) { Text("Change") }
+                TextButton(onClick = onAddPhoto) { Text("Retake") }
                 TextButton(onClick = onRemovePhoto) { Text("Remove") }
             }
         }
 
-        else -> SecondaryButton(text = "Add a photo", onClick = onAddPhoto)
+        else -> SecondaryButton(text = "Take a photo", onClick = onAddPhoto)
     }
     state.photoError?.let { FieldError(it) }
+    if (state.photo == null && !state.isProcessingPhoto) state.errors.photo?.let { FieldError(it) }
 }
 
 @Composable

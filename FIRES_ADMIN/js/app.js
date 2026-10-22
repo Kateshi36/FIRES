@@ -1,6 +1,6 @@
 import {
   U, I, RS, ACT, fl, photoBlock,
-  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, listenActivity,
+  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, getPhotoUrl, saveAiPhoto, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, listenActivity,
   createResponderAuth, saveResponderProfile, sendResponderReset, changeUserRole, verifyIncident,
   newAssignmentId, saveAssignment, refreshAssignments
 } from "./data.js";
@@ -25,6 +25,7 @@ import {
 } from "./reportRules.js";
 import { auth, db, onAuthStateChanged, signOut, doc, getDoc } from "./firebase.js";
 import { AI_ENDPOINT } from "./config.js";
+import { photoAiHtml, photoEndpoint, needsPhotoCheck, splitDataUrl, toAiFields, requestPhotoCheck } from "./photoAi.js";
 import { aiPanelHtml, buildPayload, requestSuggestion } from "./aiSuggest.js";
 const $=s=>document.querySelector(s);let tab="over";
 const mins=i=>Math.round((i.resolvedMs-i.submittedMs)/6e4);
@@ -54,7 +55,7 @@ function showError(e,retry=render){
   $("#retry").onclick=()=>retry();
 }
 // Draw the live screens, then fill in responder names for the few active incidents and redraw.
-function drawLive(){if(!live())return;checkNew();screens[tab]();loadActiveAssignments().then(did=>{if(did&&live())screens[tab]()})}
+function drawLive(){if(!live())return;checkNew();autoPhotoChecks();screens[tab]();loadActiveAssignments().then(did=>{if(did&&live())screens[tab]()})}
 async function render(){
   const my=++renderSeq;
   if(tab!=="map")destroyMap();
@@ -386,9 +387,52 @@ const msg=ld?"Loading...":er?"Could not load.":i.msgs.map(m=>`<div class="msg"><
 open(`<small class="muted">Incident</small><h2>${i.code}</h2><div class="pills"><span class="pill ${i.severity}">${i.severity}</span> <span class="pill ${i.status}">${i.status}</span></div>
 <div class="kv"><small>Photo from reporter</small>${photoBlock(i)}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
 <div class="kv"><small>Submitted</small>${i.submittedAt}</div><div class="kv"><small>Date resolved</small>${i.dateResolved?i.dateResolved+" ("+mins(i)+" min)":ld?"Loading...":i.rawStatus==="resolved"?"Resolved (record not found)":"Not yet resolved"}</div>
-<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${aiPanelHtml(i,aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
+<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${photoAiHtml(i,pcSt[i.id],AI_ENDPOINT)}${aiPanelHtml(i,aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
 <div class="step"><h3 class="stepn"><span>2</span>Responders</h3><div class="kv"><small>Assigned responders</small>${asn}${assignButtonHtml(i)}</div></div>
-<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAi(i.id)}
+<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAi(i.id);wirePc(i.id)}
+// ---- AI photo check (advice only) ----
+// New open reports with a photo are checked one at a time (the Worker's limit is 12 a minute) while this
+// page is open on the live screens; any report can also be checked by hand from its drawer. The answer is
+// saved ONCE on the incident (six ai* fields) and shown to everyone as advice. It never changes a status
+// or a severity. A failure only shows a message: the rest of the drawer works as before.
+const pcSt={},pcTried=new Set(),pcQueue=[];let pcRun=false;
+const PC_DAYS=3,PC_MAX=30,PC_GAP=6000;
+function redrawPc(id){if(openId!==id)return;const i=findIncident(id);if(!i)return;
+  const e=$("#pai"),h=photoAiHtml(i,pcSt[id],AI_ENDPOINT);
+  if(e&&h){e.outerHTML=h;wirePc(id)}else drawerFor(i)}
+function wirePc(id){const b=$("#pcb");if(b)b.onclick=()=>{pcTried.add(id);checkPhoto(id)}}
+async function checkPhoto(id){
+  const i=findIncident(id);
+  if(!AI_ENDPOINT||!i||!needsPhotoCheck(i)||(pcSt[id]&&pcSt[id].status==="loading"))return;
+  pcSt[id]={status:"loading"};redrawPc(id);
+  let r;
+  try{
+    const sp=splitDataUrl(await getPhotoUrl(i));
+    if(!sp)r={ok:false,text:"The photo could not be read."};
+    else{const tok=await auth.currentUser.getIdToken();r=await requestPhotoCheck(photoEndpoint(AI_ENDPOINT),tok,sp)}
+  }catch(e){r={ok:false,text:"The AI photo check is not available right now."}}
+  if(r.ok){
+    try{const o=await saveAiPhoto(id,toAiFields(r.answer),i);if(o.stale&&!i.photoAi)r={ok:false,text:"This report was already checked. Reopen it to see the answer."}}
+    catch(e){console.warn("ai photo save failed",id,e);r={ok:false,text:"The AI answered but it could not be saved. Try again."}}
+  }
+  if(r.ok)delete pcSt[id];else pcSt[id]={status:"error",text:r.text};
+  redrawPc(id)}
+// Called after each live update: queue the open, unchecked photo reports of the last days.
+function autoPhotoChecks(){
+  if(!AI_ENDPOINT||!live())return;
+  const since=Date.now()-PC_DAYS*86400000;
+  for(const i of I){
+    if(pcTried.size>=PC_MAX)break;
+    if(needsPhotoCheck(i)&&!pcTried.has(i.id)&&i.submittedMs!=null&&i.submittedMs>=since){pcTried.add(i.id);pcQueue.push(i.id)}}
+  if(!pcRun&&pcQueue.length)pumpPc()}
+async function pumpPc(){
+  pcRun=true;
+  while(pcQueue.length){
+    const id=pcQueue.shift();
+    if(!auth.currentUser)break;
+    await checkPhoto(id);
+    if(pcQueue.length)await new Promise(r=>setTimeout(r,PC_GAP))}
+  pcRun=false}
 // ---- AI suggestion (advice only, nothing is written) ----
 // The panel asks the Cloudflare Worker (config.js) for a severity and duplicate hint, only when the
 // administrator presses the button. If it fails the rest of the drawer works exactly as before.

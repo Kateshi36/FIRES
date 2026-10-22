@@ -76,6 +76,7 @@ import com.example.fires.ui.common.rememberLocationAccess
 import com.example.fires.ui.common.SecondaryButton
 import com.example.fires.ui.common.SeverityChip
 import com.example.fires.ui.common.StatusChip
+import com.example.fires.util.PhotoAiRules
 import com.example.fires.ui.common.Tone
 import com.example.fires.ui.common.ToneBanner
 import com.example.fires.ui.common.TonePill
@@ -358,6 +359,7 @@ private fun IncidentDetails(
 
         if (incident.hasPhoto) {
             Panel(title = "Photo") { PhotoBox(state.photo, onRetryPhoto) }
+            AiAdvicePanel(state = state, incident = incident, actions = actions)
         }
 
         Panel(title = "Situation") {
@@ -439,6 +441,62 @@ private fun IncidentDetails(
         }
 
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+// ---------- AI photo advice (Phase AI) ----------
+
+/**
+ * What the AI thought of the photo, as advice. The administrator's website asks the AI and saves the
+ * answer on the report; the app only shows it. The AI never changes the status, the severity or who
+ * is notified: "Use this severity" goes through the same severity change as the buttons below, and
+ * only the responder can tap it.
+ */
+@Composable
+private fun AiAdvicePanel(state: IncidentDetailUiState, incident: Incident, actions: IncidentDetailActions) {
+    val status = incident.statusEnum()
+    if (PhotoAiRules.hasAdvice(incident)) {
+        Panel(title = "AI suggestion") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (PhotoAiRules.looksGenerated(incident)) {
+                    ToneBanner(text = PhotoAiRules.GENERATED_NOTE, tone = Tone.AMBER, icon = Icons.Filled.Warning)
+                }
+                Text(PhotoAiRules.headline(incident), style = MaterialTheme.typography.titleMedium)
+                val line = PhotoAiRules.severityLine(incident)
+                if (line.isNotEmpty()) Text("Severity: $line", style = MaterialTheme.typography.bodyLarge)
+                incident.aiReason?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (PhotoAiRules.mismatch(incident)) {
+                    ToneBanner(
+                        text = "The form score says " + incident.severityEnum().label + ". Look at this report twice.",
+                        tone = Tone.AMBER,
+                        icon = Icons.Filled.Warning
+                    )
+                    val suggested = PhotoAiRules.suggestedSeverity(incident)
+                    if (suggested != null && IncidentActionRules.canOverrideSeverity(status)) {
+                        SecondaryButton(
+                            text = "Use this severity (" + suggested.label + ")",
+                            onClick = { actions.onSetSeverity(suggested) }
+                        )
+                    }
+                }
+                Text(
+                    PhotoAiRules.ADVICE_NOTE,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else if (status.isActive) {
+        // The administrator's website checks new photos. Until it has, there is nothing to show.
+        Panel(title = "AI suggestion") {
+            Text(
+                PhotoAiRules.NOT_CHECKED,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

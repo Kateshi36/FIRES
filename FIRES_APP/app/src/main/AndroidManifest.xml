@@ -66,6 +66,20 @@
         </activity>
 
         <!--
+          Lets the system camera app write the report photo into this app's cache (and nothing else).
+          Not exported. The file is a temporary picture that is shrunk and then no longer needed.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!--
           Responder alert listener (F1.3). Not exported: only this app can start it.
           specialUse, not dataSync: on Android 15+ a dataSync service is stopped after about 6 hours,
           and this one has to run all day. The subtype text is required with specialUse and is what

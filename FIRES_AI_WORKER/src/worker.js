@@ -1,11 +1,16 @@
 // Cloudflare Worker: the small "backend" of the F.I.R.E.S. AI helper.
 // It keeps the Gemini API key secret, accepts calls only from a signed-in ADMINISTRATOR of project
 // fires-a81c0, sends a short text-only prompt to Gemini and returns a validated suggestion.
-// It never writes to Firestore and never changes a report.
-import { PROMPT_VERSION, SYSTEM_PROMPT, sanitizeRequest, buildPrompt, parseAnswer, verifyIdToken, makeLimiter } from "./core.js";
+// It never writes to Firestore and never changes a report. Two jobs: /suggest (report text) and /photo (one photo).
+import {
+  PROMPT_VERSION, SYSTEM_PROMPT, sanitizeRequest, buildPrompt, parseAnswer,
+  PHOTO_PROMPT, PHOTO_PROMPT_VERSION, sanitizePhotoRequest, parsePhotoAnswer,
+  verifyIdToken, makeLimiter
+} from "./core.js";
 
 const JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const limiter = makeLimiter(20, 60_000);   // 20 suggestions per minute per person
+const photoLimiter = makeLimiter(12, 60_000);   // 12 photo checks per minute per person
 let jwksCache = { at: 0, keys: [] };
 
 async function getKeys() {
@@ -43,7 +48,8 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: h ? 204 : 403, headers: h || {} });
     if (!h) return reply(403, { error: "origin" }, {});
     const url = new URL(request.url);
-    if (request.method !== "POST" || url.pathname !== "/suggest") return reply(404, { error: "not found" }, h);
+    if (request.method !== "POST" || (url.pathname !== "/suggest" && url.pathname !== "/photo")) return reply(404, { error: "not found" }, h);
+    const isPhoto = url.pathname === "/photo";
 
     const projectId = env.FIREBASE_PROJECT_ID;
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
@@ -51,12 +57,12 @@ export default {
     try { claims = await verifyIdToken(token, await getKeys(), projectId); }
     catch { return reply(401, { error: "Sign in again." }, h); }
     if (!(await isAdmin(claims.sub, token, projectId))) return reply(403, { error: "Administrators only." }, h);
-    if (!limiter(claims.sub)) return reply(429, { error: "Too many requests. Try again in a minute." }, h);
+    if (!(isPhoto ? photoLimiter : limiter)(claims.sub)) return reply(429, { error: "Too many requests. Try again in a minute." }, h);
 
     let body;
     try { body = await request.json(); } catch { return reply(400, { error: "Bad request." }, h); }
-    const input = sanitizeRequest(body);
-    if (!input) return reply(400, { error: "The report has no text to read." }, h);
+    const input = isPhoto ? sanitizePhotoRequest(body) : sanitizeRequest(body);
+    if (!input) return reply(400, { error: isPhoto ? "The photo could not be read." : "The report has no text to read." }, h);
 
     const model = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
     let res;
@@ -64,29 +70,34 @@ export default {
       res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-        body: JSON.stringify({
+        body: JSON.stringify(isPhoto ? {
+          contents: [{ role: "user", parts: [{ text: PHOTO_PROMPT }, { inlineData: { mimeType: input.mimeType, data: input.base64 } }] }],
+          generationConfig: { temperature: 0, responseMimeType: "application/json", maxOutputTokens: 2048 }
+        } : {
           systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
           generationConfig: { temperature: 0, responseMimeType: "application/json", maxOutputTokens: 2048 }
         }),
-        signal: AbortSignal.timeout(12_000)
+        signal: AbortSignal.timeout(isPhoto ? 20_000 : 12_000)
       });
     } catch { return reply(504, { error: "The AI did not answer in time." }, h); }
     if (res.status === 429) return reply(429, { error: "The free AI quota is used up for now." }, h);
     if (!res.ok) {
-      const why = (await res.text().catch(() => "")).slice(0, 300);
-      console.error("Gemini error", res.status, why);
-      return reply(502, { error: "The AI service is unavailable.", detail: `Gemini ${res.status}` }, h);
+      const why = await res.text().catch(() => "");
+      console.error("Gemini error", res.status, why.slice(0, 300));
+      let msg = "";
+      try { msg = String(JSON.parse(why).error.message || "").replace(/AIza[\w-]+/g, "[key]").slice(0, 140); } catch { /* not JSON */ }
+      return reply(502, { error: "The AI service is unavailable.", detail: `Gemini ${res.status}${msg ? ": " + msg : ""}` }, h);
     }
 
     const data = await res.json();
     const text = data && data.candidates && data.candidates[0] && data.candidates[0].content
       && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    const answer = parseAnswer(text, input.nearby);
+    const answer = isPhoto ? parsePhotoAnswer(text) : parseAnswer(text, input.nearby);
     if (!answer) {
       console.error("Unusable answer", String(text).slice(0, 300), JSON.stringify(data && data.promptFeedback || ""));
       return reply(502, { error: "The AI gave an answer we could not use.", detail: "bad answer" }, h);
     }
-    return reply(200, { ...answer, promptVersion: PROMPT_VERSION, model }, h);
+    return reply(200, { ...answer, promptVersion: isPhoto ? PHOTO_PROMPT_VERSION : PROMPT_VERSION, model }, h);
   }
 };

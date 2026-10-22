@@ -57,6 +57,8 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    // Phase AI: photo analysis with Gemini through Firebase AI Logic (free Spark plan, no key in the app).
+    // App Check (debug provider for the team's phones) is what Firebase AI Logic asks for.
 
     // Location (GPS) + Task.await() for Firebase/Play Services calls
     implementation(libs.play.services.location)
