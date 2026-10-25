@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +24,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +40,7 @@ import com.example.fires.ui.common.PrimaryButton
 import com.example.fires.ui.navigation.toRoute
 import com.example.fires.ui.theme.FIRESTheme
 import com.example.fires.util.AuthErrors
+import com.example.fires.util.PrivacyNotice
 import com.example.fires.util.Validators
 import com.example.fires.viewmodel.SessionState
 import com.example.fires.viewmodel.SignUpUiState
@@ -71,6 +77,7 @@ fun SignUpScreen(
         onContactChange = viewModel::onContactChange,
         onPasswordChange = viewModel::onPasswordChange,
         onConfirmPasswordChange = viewModel::onConfirmPasswordChange,
+        onConsentChange = viewModel::onConsentChange,
         onSignUpClick = viewModel::onSignUpClick,
         onLoginClick = onLoginClick
     )
@@ -91,12 +98,15 @@ fun SignUpContent(
     onContactChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onConfirmPasswordChange: (String) -> Unit,
+    onConsentChange: (Boolean) -> Unit,
     onSignUpClick: () -> Unit,
     onLoginClick: () -> Unit
 ) {
+    var showNotice by rememberSaveable { mutableStateOf(false) }
     // Fields are locked while sending, and after the account exists (the retry must save exactly
     // what was submitted; the ViewModel ignores edits in that state as well).
     val fieldsEnabled = !state.isLoading && !state.accountCreated
+    if (showNotice) PrivacyNoticeDialog(onDismiss = { showNotice = false })
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -176,6 +186,30 @@ fun SignUpContent(
                         isPassword = true,
                         enabled = fieldsEnabled
                     )
+                    Spacer(Modifier.height(12.dp))
+
+                    // Consent (RA 10173): the account cannot be created until this is ticked.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = state.agreed,
+                            onCheckedChange = onConsentChange,
+                            enabled = fieldsEnabled
+                        )
+                        Text(
+                            text = PrivacyNotice.CONSENT_LABEL,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    TextButton(onClick = { showNotice = true }) {
+                        Text(PrivacyNotice.READ_LINK, style = MaterialTheme.typography.labelLarge)
+                    }
+                    state.consentError?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
 
                     // No connection, account saved but details not, etc. Sits just above the button.
@@ -214,6 +248,24 @@ fun SignUpContent(
     }
 }
 
+/** The privacy notice, shown in a dialog from the sign-up screen. */
+@Composable
+private fun PrivacyNoticeDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(PrivacyNotice.TITLE) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                PrivacyNotice.PARAGRAPHS.forEach {
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(10.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(PrivacyNotice.CLOSE) } }
+    )
+}
+
 // ---------- Previews ----------
 
 private val noOp: () -> Unit = {}
@@ -229,6 +281,7 @@ private fun PreviewContent(state: SignUpUiState) {
             onContactChange = noOpText,
             onPasswordChange = noOpText,
             onConfirmPasswordChange = noOpText,
+            onConsentChange = {},
             onSignUpClick = noOp,
             onLoginClick = noOp
         )
@@ -240,7 +293,8 @@ private val filledState = SignUpUiState(
     email = "juan@example.com",
     contactNo = "09171234567",
     password = "secret-password",
-    confirmPassword = "secret-password"
+    confirmPassword = "secret-password",
+    agreed = true
 )
 
 @Preview(name = "Sign up - empty", showSystemUi = true)

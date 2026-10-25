@@ -42,7 +42,7 @@ export function buildPayload(incident, all) {
   };
 }
 
-export const AI_NOTE = "Advice only. Sends this report's text to an AI service (no name, phone or photo). You decide.";
+export const AI_NOTE = "Advice only. The report text and photo are sent to an AI service (no name or phone). You decide.";
 const LEVEL = { low: "Low", medium: "Medium", high: "High", critical: "Critical" };
 
 // Turns a failed call into one plain sentence.
@@ -76,25 +76,23 @@ export async function requestSuggestion(endpoint, idToken, payload, fetchFn = fe
   }
 }
 
+// Text part of the AI advice panel. It starts by itself, so there is no "Get" button: only "Try again" after a failure.
 // state: { status: "idle"|"loading"|"done"|"error", answer, text }. `all` finds the duplicate's code.
-export function aiPanelHtml(incident, state = {}, endpoint = "", all = []) {
-  const head = `<small>AI suggestion</small>`;
-  if (!endpoint) return `<div class="kv" id="aip">${head}<p class="muted" style="margin:4px 0 0">Not set up yet.</p></div>`;
+export function suggestSectionHtml(incident, state = {}, all = []) {
   if (!incident.active) return "";
-  const note = `<p class="muted small" style="margin:6px 0 0">${esc(AI_NOTE)}</p>`;
   const st = state.status || "idle";
-  if (st === "loading") return `<div class="kv" id="aip">${head}<p class="muted" style="margin:4px 0 0">Reading the report...</p></div>`;
+  const head = `<div id="aitx" class="aisec"><b>Severity and duplicates</b>`;
+  if (st === "loading" || st === "idle") return `${head}<p class="muted" style="margin:4px 0 0">Reading the report...</p></div>`;
   if (st === "done" && state.answer) {
     const a = state.answer, level = LEVEL[a.severity];
     const differs = level !== incident.severity;
     const dup = a.duplicateOf ? all.find(o => o.id === a.duplicateOf) : null;
-    return `<div class="kv" id="aip">${head}`
+    return `${head}`
       + `<div style="margin:4px 0"><span class="pill ${esc(level)}">${esc(level)}</span> <span class="muted">${Math.round(a.confidence * 100)}% sure</span></div>`
       + (differs ? `<p class="muted" style="margin:4px 0">The form score says <b>${esc(incident.severity)}</b>. Look at this report twice.</p>` : `<p class="muted" style="margin:4px 0">Matches the form score.</p>`)
       + `<ul style="margin:4px 0 4px 18px;padding:0">${a.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>`
       + (dup ? `<p style="margin:6px 0"><b>Looks like the same fire as</b> <a href="#" class="lnk" data-aid="${esc(dup.id)}">${esc(dup.code)}</a>${a.duplicateReason ? `<br><span class="muted">${esc(a.duplicateReason)}</span>` : ""}</p>` : "")
-      + `<button type="button" class="btn ghost" id="aib">Ask again</button>${note}</div>`;
+      + `</div>`;
   }
-  const err = st === "error" ? `<p class="ferr" role="alert" style="margin:4px 0">${esc(state.text || failText(0))}</p>` : "";
-  return `<div class="kv" id="aip">${head}${err}<button type="button" class="btn ghost" id="aib">${st === "error" ? "Try again" : "Get AI suggestion"}</button>${note}</div>`;
+  return `${head}<p class="ferr" role="alert" style="margin:4px 0">${esc(state.text || failText(0))}</p><button type="button" class="btn ghost" id="aib">Try again</button></div>`;
 }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { metersBetween, nearbyCandidates, buildPayload, requestSuggestion, aiPanelHtml, failText, AI_NOTE } from "../js/aiSuggest.js";
+import { metersBetween, nearbyCandidates, buildPayload, requestSuggestion, suggestSectionHtml, failText, AI_NOTE } from "../js/aiSuggest.js";
 import { mapIncident, esc } from "../js/mapping.js";
 
 const base = { latitude: 14.5995, longitude: 120.9842, status: "reported", fireType: "structural", description: "House on fire <b>x</b>", addressText: "Purok 3", fireSize: "large", peopleAtRisk: 3, trapped: true, vulnerablePersons: ["children"], hazards: ["lpg_tank"], severity: "high", reporterName: "Juan Dela Cruz", reporterContact: "09171234567" };
@@ -62,26 +62,25 @@ test("requestSuggestion turns every failure into a plain sentence and never thro
   assert.equal((await requestSuggestion("u", "t", {}, async () => { throw t; })).text, failText("timeout"));
 });
 
-test("panel: off without an endpoint, hidden for closed reports, button when idle", () => {
+test("text section: hidden for closed reports, starts by itself", () => {
   const i = mk("me00000");
-  assert.match(aiPanelHtml(i, {}, ""), /Not set up yet/);
-  assert.equal(aiPanelHtml({ ...i, active: false }, {}, "https://w"), "");
-  const idle = aiPanelHtml(i, {}, "https://w");
-  assert.match(idle, /id="aib"/); assert.ok(idle.includes(esc(AI_NOTE)));
+  assert.equal(suggestSectionHtml({ ...i, active: false }, {}), "");
+  const idle = suggestSectionHtml(i, {});
+  assert.match(idle, /Reading the report/); assert.ok(!idle.includes("aib"));
 });
 
-test("panel: shows severity, mismatch hint, escaped reasons and a link to the duplicate", () => {
+test("text section: shows severity, mismatch hint, escaped reasons and a link to the duplicate", () => {
   const i = mk("me00000"), other = mk("dup0001");
-  const html = aiPanelHtml(i, { status: "done", answer: { ...answer, reasons: ["<img src=x onerror=1>"], duplicateOf: "dup0001", duplicateReason: "Same street" } }, "https://w", [i, other]);
+  const html = suggestSectionHtml(i, { status: "done", answer: { ...answer, reasons: ["<img src=x onerror=1>"], duplicateOf: "dup0001", duplicateReason: "Same street" } }, [i, other]);
   assert.match(html, /Critical/); assert.match(html, /form score says <b>High<\/b>/);
   assert.ok(!html.includes("<img")); assert.match(html, /data-aid="dup0001"/);
-  const same = aiPanelHtml(mk("x", { severity: "critical" }), { status: "done", answer }, "https://w", []);
+  const same = suggestSectionHtml(mk("x", { severity: "critical" }), { status: "done", answer }, []);
   assert.match(same, /Matches the form score/);
 });
 
-test("panel: loading and error states", () => {
+test("text section: loading and error states", () => {
   const i = mk("me00000");
-  assert.match(aiPanelHtml(i, { status: "loading" }, "https://w"), /Reading the report/);
-  const e = aiPanelHtml(i, { status: "error", text: "Nope <b>" }, "https://w");
-  assert.match(e, /Try again/); assert.ok(!e.includes("<b>"));
+  assert.match(suggestSectionHtml(i, { status: "loading" }), /Reading the report/);
+  const e = suggestSectionHtml(i, { status: "error", text: "Nope <b>" });
+  assert.match(e, /id="aib"[^>]*>Try again/); assert.ok(!e.includes("Nope <b>")); assert.match(e, /Nope &lt;b&gt;/);
 });

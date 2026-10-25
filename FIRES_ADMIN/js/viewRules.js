@@ -160,7 +160,8 @@ const KIND = {
   assign: { icon: "👤", tone: "info", cats: ["assign", "admin"] },
   unassign: { icon: "👤", tone: "neu", cats: ["assign", "admin"] },
   role: { icon: "🔑", tone: "md", cats: ["account", "admin"] },
-  create: { icon: "🔑", tone: "md", cats: ["account", "admin"] }
+  create: { icon: "🔑", tone: "md", cats: ["account", "admin"] },
+  photo: { icon: "🖼", tone: "neu", cats: ["report", "admin"] }
 };
 export const kindInfo = k => KIND[k] || { icon: "•", tone: "neu", cats: [] };
 export const ACTIVITY_TYPES = Object.keys(KIND).filter(k => !["reported", "resolved", "status"].includes(k));

@@ -16,7 +16,7 @@ Worker holds the key. The website never sees it.
 STEP 1  Get a Gemini key (free)
   1. Open https://aistudio.google.com and sign in with the team's Google account.
   2. Create an API key. Check the current free limits shown there.
-  3. Pick a current model that is NOT marked "preview" (the models page of the Gemini API lists them; older models such as gemini-2.5-flash may have been shut down, which shows as "Gemini 404") and write its name and today's date in the paper
+  3. Pick a current model that is NOT marked "preview" (the models page of the Gemini API lists them; older models may have been shut down, which shows as "Gemini 404") and write its name and today's date in the paper
      (the adviser asked which model is used). Put the name in wrangler.toml, line GEMINI_MODEL.
 
 STEP 2  Create the Worker (free Cloudflare account, no card)

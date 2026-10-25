@@ -73,6 +73,20 @@ fun statusColor(status: IncidentStatus): Color = when (status) {
     IncidentStatus.DISMISSED -> Gray600
 }
 
+/**
+ * The OUTLINE colour of a map marker. The fill of a marker is the severity (red, amber, blue, green),
+ * so the outline uses colours that are not used for severity: grey, purple, teal and slate. That way
+ * "Medium" and "Verified", or "Critical" and "On scene", can never look the same on the map.
+ */
+fun statusRingColor(status: IncidentStatus): Color = when (status) {
+    IncidentStatus.REPORTED -> Color(0xFF757575)
+    IncidentStatus.VERIFIED -> Color(0xFF7B1FA2)
+    IncidentStatus.DISPATCHED -> Color(0xFF00897B)
+    IncidentStatus.ON_SCENE -> Color(0xFF37474F)
+    IncidentStatus.RESOLVED -> Color(0xFF2E7D32)
+    IncidentStatus.DISMISSED -> Color(0xFF9E9E9E)
+}
+
 // ---------- Buttons ----------
 
 @Composable

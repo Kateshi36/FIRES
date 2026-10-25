@@ -1,6 +1,10 @@
 package com.example.fires.ui.citizen
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalContext
+import com.example.fires.util.Hotline
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
@@ -102,9 +106,23 @@ fun AlertSentContent(
     onAddMessage: () -> Unit
 ) {
     val failed = state.delivery == DeliveryState.FAILED
+    val context = LocalContext.current
+    // Opens the dialer only. The person still has to press call.
+    val callHotline = {
+        try {
+            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse(Hotline.dialUri())))
+        } catch (_: android.content.ActivityNotFoundException) {
+            // A device with no dialer (some tablets): the banner above still tells the person the number.
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
+
+            // Back to the home screen from any state (sending, sent or refused).
+            IconButton(onClick = onBack, modifier = Modifier.padding(start = 8.dp, top = 4.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to home")
+            }
 
             Column(
                 modifier = Modifier
@@ -155,6 +173,15 @@ fun AlertSentContent(
                     )
                 }
 
+                if (state.delivery != DeliveryState.SENT) {
+                    Spacer(Modifier.height(16.dp))
+                    ToneBanner(
+                        text = if (failed) Hotline.REFUSED_TEXT else Hotline.NO_SIGNAL_TEXT,
+                        tone = Tone.RED,
+                        icon = Icons.Filled.Warning
+                    )
+                }
+
                 if (!failed) {
                     Spacer(Modifier.height(24.dp))
                     NextStepsCard(SentRules.steps(state.delivery, state.sentAtMillis, state.hasPhoto))
@@ -170,8 +197,16 @@ fun AlertSentContent(
             // ---- Actions ----
             Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 8.dp)) {
                 // A report that was refused has nothing to follow.
+                if (state.delivery != DeliveryState.SENT) {
+                    PrimaryButton(text = Hotline.BUTTON, onClick = callHotline)
+                    Spacer(Modifier.height(10.dp))
+                }
                 if (!failed) {
-                    PrimaryButton(text = "Track live status", onClick = onViewStatus)
+                    if (state.delivery == DeliveryState.SENT) {
+                        PrimaryButton(text = "Track live status", onClick = onViewStatus)
+                    } else {
+                        SecondaryButton(text = "Track live status", onClick = onViewStatus)
+                    }
                     Spacer(Modifier.height(10.dp))
                     SecondaryButton(text = "Add a message", onClick = onAddMessage)
                 } else {

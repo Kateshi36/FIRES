@@ -1,5 +1,5 @@
 // Measures the AI helper on the labelled sample reports (for Chapter 4 of the paper).
-//   GEMINI_API_KEY=... GEMINI_MODEL=gemini-2.5-flash node eval/run-eval.mjs
+//   GEMINI_API_KEY=... GEMINI_MODEL=<model-name> node eval/run-eval.mjs
 // Each report is sent 3 times. The script prints a Markdown table and saves eval/results.md.
 // The labels in sample-reports.json are EXAMPLES. Replace them with the team's own labels, checked by
 // B-FLARE or BFP, and add more reports. Keep about 20 percent aside for tuning the prompt and never tune on the rest.

@@ -77,7 +77,6 @@ import com.example.fires.ui.common.SecondaryButton
 import com.example.fires.ui.common.rememberLocationAccess
 import com.example.fires.ui.theme.FIRESTheme
 import com.example.fires.util.LocationGate
-import com.example.fires.util.PhotoAiRules
 import com.example.fires.util.PhotoProcessor
 import com.example.fires.util.PhotoRules
 import com.example.fires.util.ReportValidators
@@ -203,6 +202,22 @@ fun ReportContent(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
+                // Photo and place come first: they are what the responders need most, and the
+                // rest can be filled in while the report is already ready to send.
+                // ---- Photo (required) ----
+                PhotoSection(state = state, onAddPhoto = onAddPhoto, onRemovePhoto = onRemovePhoto)
+                Spacer(Modifier.height(24.dp))
+
+                // ---- Location ----
+                LocationSection(
+                    state = state,
+                    location = location,
+                    onUseGps = onUseGps,
+                    onAdjustPin = onAdjustPin,
+                    onAddressChange = onAddressChange
+                )
+                Spacer(Modifier.height(24.dp))
+
                 // ---- What is happening ----
                 LabeledDropdown(
                     label = "Type of fire",
@@ -297,20 +312,6 @@ fun ReportContent(
                 )
                 Spacer(Modifier.height(24.dp))
 
-                // ---- Photo (required) ----
-                PhotoSection(state = state, onAddPhoto = onAddPhoto, onRemovePhoto = onRemovePhoto)
-                Spacer(Modifier.height(24.dp))
-
-                // ---- Location ----
-                LocationSection(
-                    state = state,
-                    location = location,
-                    onUseGps = onUseGps,
-                    onAdjustPin = onAdjustPin,
-                    onAddressChange = onAddressChange
-                )
-                Spacer(Modifier.height(24.dp))
-
                 // ---- Send ----
                 if (state.showFormError) {
                     ErrorBanner("Some details are missing. Check the fields marked in red.")
@@ -338,11 +339,9 @@ private fun PhotoSection(
     onAddPhoto: () -> Unit,
     onRemovePhoto: () -> Unit
 ) {
-    SectionTitle("Photo")
+    SectionTitle("Photo of the fire")
     Text(
-        "Take a photo of the fire now, so the responders and the administrator can see what is " +
-            "happening. Photos from the gallery are not accepted. We shrink it to save data. " +
-            PhotoAiRules.CONSENT,
+        "Required. Take it with your camera.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )

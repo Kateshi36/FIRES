@@ -7,7 +7,6 @@ import { failText } from "./aiSuggest.js";
 
 export const PHOTO_AI_NOTE = "Advice only. The administrator decides.";
 export const GENERATED_NOTE = "This photo may be AI-generated or edited. Look at it carefully.";
-export const PHOTO_SEND_NOTE = "Sends this report's photo to an AI service (no name or phone). Advice only. You decide.";
 const HEAD = { yes: "Fire likely", no: "No fire seen", unsure: "Not sure there is a fire" };
 const DETECTED = ["yes", "no", "unsure"], LEVELS = ["none", "low", "medium", "high", "critical"];
 
@@ -66,24 +65,20 @@ export function photoMismatch(i) {
   return a.severity !== String(i.plain?.severity || "low");
 }
 
-// state: { status: "idle"|"loading"|"error", text }. Returns "" when there is nothing to show.
-export function photoAiHtml(i, state = {}, endpoint = "") {
-  const a = i.photoAi, head = "<small>AI photo advice</small>";
+// Photo part of the AI advice panel. Starts by itself, so only "Try again" after a failure.
+// state: { status: "idle"|"loading"|"error", text }. Returns "" when there is no photo to check.
+export function photoSectionHtml(i, state = {}) {
+  const a = i.photoAi, head = `<div id="pai" class="aisec"><b>Photo</b>`;
   if (a) {
     const lvl = a.severity === "none" ? "" : a.severity[0].toUpperCase() + a.severity.slice(1);
     const line = a.fire === "yes" && lvl ? `<div>Severity: ${esc(lvl)} (${Math.round(a.confidence * 100)}%)</div>` : "";
     const warn = photoMismatch(i)
       ? `<div class="muted" id="aimis">The form score says ${esc(i.severity)}. Look at this report twice.</div>` : "";
-    const meta = [a.model, a.version].filter(Boolean).map(esc).join(" ");
     const gen = a.generated === "yes" ? `<div class="ferr" id="aigen" role="alert" style="margin:4px 0">${esc(GENERATED_NOTE)}</div>` : "";
-    return `<div class="kv" id="pai">${head}${gen}<b>${HEAD[a.fire]}</b>${line}` +
-      `${a.reason ? `<div>${esc(a.reason)}</div>` : ""}${warn}` +
-      `<div class="muted">${esc(PHOTO_AI_NOTE)}${meta ? " (" + meta + ")" : ""}</div></div>`;
+    return `${head}${gen}<div>${HEAD[a.fire]}</div>${line}${a.reason ? `<div>${esc(a.reason)}</div>` : ""}${warn}</div>`;
   }
-  if (!endpoint || !needsPhotoCheck(i)) return "";
+  if (!needsPhotoCheck(i)) return "";
   const st = state.status || "idle";
-  const note = `<p class="muted small" style="margin:6px 0 0">${esc(PHOTO_SEND_NOTE)}</p>`;
-  if (st === "loading") return `<div class="kv" id="pai">${head}<p class="muted" style="margin:4px 0 0">Reading the photo...</p></div>`;
-  const err = st === "error" ? `<p class="ferr" role="alert" style="margin:4px 0">${esc(state.text || failText(0))}</p>` : "";
-  return `<div class="kv" id="pai">${head}${err}<button type="button" class="btn ghost" id="pcb">${st === "error" ? "Try again" : "Check photo with AI"}</button>${note}</div>`;
+  if (st === "error") return `${head}<p class="ferr" role="alert" style="margin:4px 0">${esc(state.text || failText(0))}</p><button type="button" class="btn ghost" id="pcb">Try again</button></div>`;
+  return `${head}<p class="muted" style="margin:4px 0 0">Reading the photo...</p></div>`;
 }

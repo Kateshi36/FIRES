@@ -82,6 +82,7 @@ import com.example.fires.ui.common.ToneBanner
 import com.example.fires.ui.common.TonePill
 import com.example.fires.ui.common.severityColor
 import com.example.fires.ui.common.statusColor
+import com.example.fires.ui.common.statusRingColor
 import com.example.fires.ui.theme.Amber
 import com.example.fires.ui.theme.Border
 import com.example.fires.ui.theme.FIRESTheme
@@ -402,7 +403,7 @@ private fun IncidentDetails(
                         title = incident.fireTypeEnum().label,
                         // Same colors as the dashboard: fill is severity, ring is status.
                         color = severityColor(incident.severityEnum()),
-                        ringColor = statusColor(incident.statusEnum()),
+                        ringColor = statusRingColor(incident.statusEnum()),
                         highlighted = incident.isSuspicious
                     )
                 )

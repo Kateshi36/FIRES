@@ -20,7 +20,7 @@ object ReportValidators {
     const val MSG_DESCRIPTION_BLANK = "Describe what is burning and what you see."
     const val MSG_DESCRIPTION_SHORT = "Add a little more detail (at least $MIN_DESCRIPTION characters)."
     const val MSG_SIZE_MISSING = "Choose how big the fire is."
-    const val MSG_PHOTO_MISSING = "Add a photo of the fire. It helps the responders and the administrator."
+    const val MSG_PHOTO_MISSING = "Please take a photo."
     const val MSG_LOCATION_MISSING = "Set where the fire is. Use your GPS or move the pin on the map."
 
     data class ReportErrors(

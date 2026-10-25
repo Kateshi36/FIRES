@@ -1,15 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mapIncident } from "../js/mapping.js";
-import { photoAiHtml, photoMismatch } from "../js/photoAi.js";
+import { photoSectionHtml as photoAiHtml, photoMismatch } from "../js/photoAi.js";
 
 const base = { description: "x", severity: "low", status: "reported", hasPhoto: true };
 const ai = { aiFireDetected: "yes", aiSeverity: "high", aiConfidence: 0.85, aiReason: "Flames <b>", aiPromptVersion: "v1", aiModel: "m" };
 
-test("no ai fields: nothing shown", () => {
+test("no ai fields: no result is shown", () => {
   const i = mapIncident("abc12345", base);
   assert.equal(i.photoAi, null);
-  assert.equal(photoAiHtml(i), "");
+  assert.ok(!/Fire likely|No fire/.test(photoAiHtml(i)));
 });
 test("maps and shows advice, escaped", () => {
   const i = mapIncident("abc12345", { ...base, ...ai });
@@ -17,7 +17,6 @@ test("maps and shows advice, escaped", () => {
   assert.match(h, /Fire likely/);
   assert.match(h, /High \(85%\)/);
   assert.ok(!h.includes("Flames <b>")); assert.match(h, /Flames &lt;b&gt;/);
-  assert.match(h, /Advice only/);
 });
 test("mismatch with the form score", () => {
   assert.equal(photoMismatch(mapIncident("abc12345", { ...base, ...ai })), true);
@@ -76,23 +75,27 @@ test("requestPhotoCheck: success, http errors and timeouts never throw", async (
   assert.match((await requestPhotoCheck("u", "t", {}, boom)).text, /did not answer/);
 });
 
-test("panel states: nothing without endpoint, button, loading, error", () => {
+test("photo section: starts by itself, no button until a failure, hidden when there is nothing to check", () => {
   const i = open();
-  assert.equal(photoAiHtml(i, {}, ""), "");
-  assert.match(photoAiHtml(i, {}, "https://w/suggest"), /id="pcb"[^>]*>Check photo with AI/);
-  assert.match(photoAiHtml(i, { status: "loading" }, "e"), /Reading the photo/);
-  const e = photoAiHtml(i, { status: "error", text: "bad <i>" }, "e");
-  assert.match(e, /Try again/);
+  const idle = photoAiHtml(i, {});
+  assert.match(idle, /Reading the photo/); assert.ok(!idle.includes("pcb"));
+  assert.match(photoAiHtml(i, { status: "loading" }), /Reading the photo/);
+  const e = photoAiHtml(i, { status: "error", text: "bad <i>" });
+  assert.match(e, /id="pcb"[^>]*>Try again/);
   assert.ok(!e.includes("<i>"));
-  assert.equal(photoAiHtml(open({ status: "resolved" }), {}, "e"), "");
-  assert.match(photoAiHtml(open(ai), {}, ""), /Fire likely/);
+  assert.equal(photoAiHtml(open({ status: "resolved" }), {}), "");
+  assert.match(photoAiHtml(open(ai), {}), /Fire likely/);
+});
+test("the model name is never shown", () => {
+  const h = photoAiHtml(open({ ...ai, aiModel: "gemini-3.5-flash-lite" }), {});
+  assert.ok(!/gemini|flash/i.test(h));
 });
 
 test("a photo that looks AI-generated shows a warning, a normal one does not", () => {
-  const yes = photoAiHtml(open({ ...ai, aiGenerated: "yes" }), {}, "");
+  const yes = photoAiHtml(open({ ...ai, aiGenerated: "yes" }), {});
   assert.match(yes, /id="aigen"[^>]*>This photo may be AI-generated or edited/);
-  assert.ok(!photoAiHtml(open({ ...ai, aiGenerated: "no" }), {}, "").includes("aigen"));
-  assert.ok(!photoAiHtml(open(ai), {}, "").includes("aigen"));
+  assert.ok(!photoAiHtml(open({ ...ai, aiGenerated: "no" }), {}).includes("aigen"));
+  assert.ok(!photoAiHtml(open(ai), {}).includes("aigen"));
   assert.equal(open({ ...ai, aiGenerated: "yes" }).photoAi.generated, "yes");
   assert.equal(open({ ...ai, aiGenerated: "bad" }).photoAi.generated, null);
 });

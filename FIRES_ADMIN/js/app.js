@@ -1,6 +1,6 @@
 import {
   U, I, RS, ACT, fl, photoBlock,
-  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, getPhotoUrl, saveAiPhoto, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, listenActivity,
+  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, getPhotoUrl, saveAiPhoto, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, removePhoto, listenActivity,
   createResponderAuth, saveResponderProfile, sendResponderReset, changeUserRole, verifyIncident,
   newAssignmentId, saveAssignment, refreshAssignments
 } from "./data.js";
@@ -25,8 +25,9 @@ import {
 } from "./reportRules.js";
 import { auth, db, onAuthStateChanged, signOut, doc, getDoc } from "./firebase.js";
 import { AI_ENDPOINT } from "./config.js";
-import { photoAiHtml, photoEndpoint, needsPhotoCheck, splitDataUrl, toAiFields, requestPhotoCheck } from "./photoAi.js";
-import { aiPanelHtml, buildPayload, requestSuggestion } from "./aiSuggest.js";
+import { photoEndpoint, needsPhotoCheck, splitDataUrl, toAiFields, requestPhotoCheck } from "./photoAi.js";
+import { buildPayload, requestSuggestion } from "./aiSuggest.js";
+import { aiAdviceHtml } from "./aiPanel.js";
 const $=s=>document.querySelector(s);let tab="over";
 const mins=i=>Math.round((i.resolvedMs-i.submittedMs)/6e4);
 let openId=null;
@@ -385,11 +386,11 @@ const canRm=!ld&&!er&&i.assignLoaded===true&&canAssign(i);
 const asn=ld?"Loading...":er?"Could not load.":i.res.map(r=>`<div class="arow">${r[2]} - ${r[1]}${r[3].length?" ("+r[3].join(", ")+")":""}${canRm?` <button type="button" class="lnk rmasg" data-r="${esc(r[0])}">Remove</button>`:""}</div>`).join("")||"None assigned yet";
 const msg=ld?"Loading...":er?"Could not load.":i.msgs.map(m=>`<div class="msg"><b>${m[0]}</b><br>${m[1]}</div>`).join("")||"No messages";
 open(`<small class="muted">Incident</small><h2>${i.code}</h2><div class="pills"><span class="pill ${i.severity}">${i.severity}</span> <span class="pill ${i.status}">${i.status}</span></div>
-<div class="kv"><small>Photo from reporter</small>${photoBlock(i)}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
+<div class="kv"><small>Photo from reporter</small>${photoBlock(i)}${i.photoUrl?` <button type="button" class="lnk" id="rmph">Remove photo</button>`:""}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
 <div class="kv"><small>Submitted</small>${i.submittedAt}</div><div class="kv"><small>Date resolved</small>${i.dateResolved?i.dateResolved+" ("+mins(i)+" min)":ld?"Loading...":i.rawStatus==="resolved"?"Resolved (record not found)":"Not yet resolved"}</div>
-<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${photoAiHtml(i,pcSt[i.id],AI_ENDPOINT)}${aiPanelHtml(i,aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
+<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${aiAdviceHtml(i,pcSt[i.id],aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
 <div class="step"><h3 class="stepn"><span>2</span>Responders</h3><div class="kv"><small>Assigned responders</small>${asn}${assignButtonHtml(i)}</div></div>
-<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAi(i.id);wirePc(i.id)}
+<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAdvice(i.id);wirePhotoRemove(i.id);startAdvice(i)}
 // ---- AI photo check (advice only) ----
 // New open reports with a photo are checked one at a time (the Worker's limit is 12 a minute) while this
 // page is open on the live screens; any report can also be checked by hand from its drawer. The answer is
@@ -397,18 +398,30 @@ open(`<small class="muted">Incident</small><h2>${i.code}</h2><div class="pills">
 // or a severity. A failure only shows a message: the rest of the drawer works as before.
 const pcSt={},pcTried=new Set(),pcQueue=[];let pcRun=false;
 const PC_DAYS=3,PC_MAX=30,PC_GAP=6000;
-function redrawPc(id){if(openId!==id)return;const i=findIncident(id);if(!i)return;
-  const e=$("#pai"),h=photoAiHtml(i,pcSt[id],AI_ENDPOINT);
-  if(e&&h){e.outerHTML=h;wirePc(id)}else drawerFor(i)}
-function wirePc(id){const b=$("#pcb");if(b)b.onclick=()=>{pcTried.add(id);checkPhoto(id)}}
+function redrawAdvice(id){if(openId!==id)return;const i=findIncident(id);if(!i)return;
+  const e=$("#aip");if(!e){drawerFor(i);return}
+  e.outerHTML=aiAdviceHtml(i,pcSt[id],aiSt[id],AI_ENDPOINT,I);wireAdvice(id)}
+// One panel, both checks start by themselves when the drawer opens. "Try again" only appears after a failure.
+// The text suggestion is limited per page load, so opening many reports cannot use up the free AI limit.
+const AI_TX_MAX=30;let aiTxCount=0;
+function startAdvice(i){
+  if(!AI_ENDPOINT)return;
+  if(needsPhotoCheck(i)&&!pcSt[i.id]){pcTried.add(i.id);checkPhoto(i.id)}
+  if(i.active&&!aiSt[i.id]){
+    if(aiTxCount>=AI_TX_MAX){aiSt[i.id]={status:"error",text:"Automatic suggestions are paused to save the free AI limit. Press Try again if you need this one."};aiTxCount=AI_TX_MAX-1;redrawAdvice(i.id);return}
+    aiTxCount++;runSuggest(i.id)}}
+function wireAdvice(id){
+  const pb=$("#pcb");if(pb)pb.onclick=()=>{pcTried.add(id);checkPhoto(id)};
+  const tb=$("#aib");if(tb)tb.onclick=()=>runSuggest(id);
+  document.querySelectorAll("#aip [data-aid]").forEach(a=>a.onclick=e=>{e.preventDefault();detail(a.dataset.aid)})}
 async function checkPhoto(id){
   const i=findIncident(id);
   if(!AI_ENDPOINT||!i||!needsPhotoCheck(i)||(pcSt[id]&&pcSt[id].status==="loading"))return;
-  pcSt[id]={status:"loading"};redrawPc(id);
+  pcSt[id]={status:"loading"};redrawAdvice(id);
   let r;
   try{
     const sp=splitDataUrl(await getPhotoUrl(i));
-    if(!sp)r={ok:false,text:"The photo could not be read."};
+    if(!sp)r={ok:false,text:"The photo is no longer available."};
     else{const tok=await auth.currentUser.getIdToken();r=await requestPhotoCheck(photoEndpoint(AI_ENDPOINT),tok,sp)}
   }catch(e){r={ok:false,text:"The AI photo check is not available right now."}}
   if(r.ok){
@@ -416,7 +429,7 @@ async function checkPhoto(id){
     catch(e){console.warn("ai photo save failed",id,e);r={ok:false,text:"The AI answered but it could not be saved. Try again."}}
   }
   if(r.ok)delete pcSt[id];else pcSt[id]={status:"error",text:r.text};
-  redrawPc(id)}
+  redrawAdvice(id)}
 // Called after each live update: queue the open, unchecked photo reports of the last days.
 function autoPhotoChecks(){
   if(!AI_ENDPOINT||!live())return;
@@ -433,21 +446,16 @@ async function pumpPc(){
     await checkPhoto(id);
     if(pcQueue.length)await new Promise(r=>setTimeout(r,PC_GAP))}
   pcRun=false}
-// ---- AI suggestion (advice only, nothing is written) ----
-// The panel asks the Cloudflare Worker (config.js) for a severity and duplicate hint, only when the
-// administrator presses the button. If it fails the rest of the drawer works exactly as before.
+// ---- AI text suggestion (advice only, nothing is written) ----
+// Starts by itself when an open report's drawer is opened (once per report until the page is reloaded).
+// If it fails the rest of the drawer works exactly as before.
 const aiSt={};
-function redrawAi(id){if(openId!==id)return;const e=$("#aip"),i=findIncident(id);if(!i)return;
-  const h=aiPanelHtml(i,aiSt[id],AI_ENDPOINT,I);if(e)e.outerHTML=h;wireAi(id)}
-function wireAi(id){
-  const b=$("#aib");
-  if(b)b.onclick=async()=>{const i=findIncident(id);if(!i)return;
-    aiSt[id]={status:"loading"};redrawAi(id);
-    let r;
-    try{const tok=await auth.currentUser.getIdToken();r=await requestSuggestion(AI_ENDPOINT,tok,buildPayload(i,I))}
-    catch(e){r={ok:false,text:"Sign in again, then try once more."}}
-    aiSt[id]=r.ok?{status:"done",answer:r.answer}:{status:"error",text:r.text};redrawAi(id)};
-  document.querySelectorAll("#aip [data-aid]").forEach(a=>a.onclick=e=>{e.preventDefault();detail(a.dataset.aid)})}
+async function runSuggest(id){const i=findIncident(id);if(!i||!AI_ENDPOINT||(aiSt[id]&&aiSt[id].status==="loading"))return;
+  aiSt[id]={status:"loading"};redrawAdvice(id);
+  let r;
+  try{const tok=await auth.currentUser.getIdToken();r=await requestSuggestion(AI_ENDPOINT,tok,buildPayload(i,I))}
+  catch(e){r={ok:false,text:"Sign in again, then try once more."}}
+  aiSt[id]=r.ok?{status:"done",answer:r.answer}:{status:"error",text:r.text};redrawAdvice(id)}
 // ---- Assign responder (W13.15 to W13.19) ----
 // The button is drawn by assignButtonHtml() under "Assigned responders", on open reports only.
 // Remove an assigned responder (admin). Asks first; the responder is told on their phone.
@@ -463,6 +471,15 @@ function askRemove(id,rid,from){
     done:async()=>{logAct("unassign",`removed ${plain(row[2])} from ${i.code}`,id);notifyAssigned(rid,id,removedText(i),"removed");toast("Responder removed.");afterAssign(id)}
   });
 }
+function wirePhotoRemove(id){const b=$("#rmph");if(b)b.onclick=()=>{
+  const i=findIncident(id);if(!i)return;
+  confirmDlg({
+    title:"Remove this photo?",
+    body:`The photo of ${i.code} will be deleted for good. The report stays. Do this only when the reporter asks, or the photo should not be kept.`,
+    confirm:"Remove photo",from:b,
+    run:()=>removePhoto(id,i),
+    done:async()=>{logAct("photo",`removed the photo of ${i.code}`,id);toast("Photo removed.");drawerFor(i)}
+  })}}
 function wireAssign(id){const b=$("#asg");if(b)b.onclick=()=>askAssign(id,b)}
 // The Assign dialog. W13.16: the report and the responder list (accounts with the responder role from U, without
 // the ones already assigned, or a short message when nobody is left). W13.17: the unit select, preselected from the

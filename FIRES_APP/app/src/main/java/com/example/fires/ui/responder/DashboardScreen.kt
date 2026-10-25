@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,6 +79,7 @@ import com.example.fires.ui.common.Tone
 import com.example.fires.ui.common.TonePill
 import com.example.fires.ui.common.severityColor
 import com.example.fires.ui.common.statusColor
+import com.example.fires.ui.common.statusRingColor
 import com.example.fires.ui.theme.Border
 import com.example.fires.ui.theme.FIRESTheme
 import com.example.fires.util.AssignedNoticeRules
@@ -511,27 +513,32 @@ private fun IncidentGroup.toMapPoint(): MapPoint {
         longitude = primary.longitude,
         title = "${severity.label} · ${status.label}$extra",
         color = severityColor(severity),
-        ringColor = statusColor(status),
+        ringColor = statusRingColor(status),
         highlighted = isFlagged
     )
 }
 
-/** Explains the marker colors: fill is severity, ring is status, dashed and big means flagged. */
+/**
+ * Explains the marker colors, the way the markers are drawn: the FILL is the severity and the thick
+ * OUTLINE is the status. Each group wraps onto a new line on a narrow phone instead of squeezing the
+ * words, and every label stays on one line.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun Legend() {
     Surface(
         shape = RoundedCornerShape(16.dp),
         shadowElevation = 4.dp,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Dot", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(34.dp))
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Dot color = severity", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Severity.entries.reversed().forEach { LegendDot(severityColor(it), it.label, ring = false) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Ring", style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(34.dp))
-                IncidentStatus.entries.filter { it.isActive }.forEach { LegendDot(statusColor(it), it.label, ring = true) }
+            Text("Outline color = status", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                IncidentStatus.entries.filter { it.isActive }.forEach { LegendDot(statusRingColor(it), it.label, ring = true) }
             }
             Text(
                 "Large dashed marker = flagged report",
@@ -547,15 +554,19 @@ private fun LegendDot(color: Color, label: String, ring: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .size(12.dp)
+                .size(14.dp)
                 .clip(CircleShape)
                 .then(
-                    if (ring) Modifier.border(2.dp, color, CircleShape)
-                    else Modifier.background(color)
+                    if (ring) Modifier
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(3.dp, color, CircleShape)
+                    else Modifier
+                        .background(color)
+                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
                 )
         )
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.width(5.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
     }
 }
 

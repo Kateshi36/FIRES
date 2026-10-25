@@ -24,7 +24,9 @@ data class User(
     var purok: String = "",
     var emergencyContact: String = "",
     var role: String = Role.CITIZEN.value,
-    @ServerTimestamp var createdAt: Timestamp? = null
+    @ServerTimestamp var createdAt: Timestamp? = null,
+    /** When the person agreed to the privacy notice at sign-up. Null on accounts made before this existed. */
+    var consentAt: Timestamp? = null
 )
 
 data class Incident(

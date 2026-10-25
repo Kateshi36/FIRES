@@ -1,0 +1,6 @@
+[
+  { "file": "fire-house-01.jpg", "fire": "yes", "severity": "high", "aiGenerated": "no", "set": "test" },
+  { "file": "sunset-01.jpg", "fire": "no", "severity": "none", "aiGenerated": "no", "set": "test" },
+  { "file": "smoke-only-01.jpg", "fire": "no", "severity": "none", "aiGenerated": "no", "set": "tune" },
+  { "file": "generated-fire-01.png", "fire": "yes", "severity": "critical", "aiGenerated": "yes", "set": "test" }
+]

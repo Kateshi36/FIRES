@@ -17,9 +17,6 @@ object PhotoAiRules {
 
     const val PROMPT_VERSION = "v2"
 
-    /** The model the Worker uses (GEMINI_MODEL in wrangler.toml). Write the name and the date in the paper. */
-    const val MODEL = "gemini-3.5-flash-lite"
-
     // PROMPT-BEGIN
     const val PROMPT = """You are helping a barangay fire-response team in the Philippines. You are looking at ONE photo that a citizen attached to a fire report.
 Answer only from what is visible in the photo. Do not guess about things you cannot see. You only ADVISE; a human decides.

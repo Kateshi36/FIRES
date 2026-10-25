@@ -4,10 +4,12 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fires.data.model.Role
+import com.google.firebase.Timestamp
 import com.example.fires.data.model.User
 import com.example.fires.data.repository.AuthRepository
 import com.example.fires.data.repository.UserRepository
 import com.example.fires.util.AuthErrors
+import com.example.fires.util.PrivacyNotice
 import com.example.fires.util.Validators
 import com.example.fires.util.attempt
 import kotlinx.coroutines.channels.Channel
@@ -30,6 +32,9 @@ data class SignUpUiState(
     val errors: Validators.SignUpErrors = Validators.SignUpErrors(),
     val isLoading: Boolean = false,
     val generalError: String? = null,
+    /** The person ticked the privacy-notice box (RA 10173). The account is not created without it. */
+    val agreed: Boolean = false,
+    val consentError: String? = null,
     /**
      * True once the Firebase account exists. If the citizen document is not saved yet, the screen
      * should lock the fields and label the button "Try again". Pressing it calls onSignUpClick()
@@ -77,6 +82,10 @@ class SignUpViewModel(
         )
     }
 
+    fun onConsentChange(value: Boolean) = edit {
+        it.copy(agreed = value, consentError = null, generalError = null)
+    }
+
     /**
      * Validate -> create the account -> write users/{uid} with role = citizen.
      *
@@ -100,8 +109,14 @@ class SignUpViewModel(
         val errors = Validators.validateSignUp(
             s.name, s.email, s.contactNo, s.password, s.confirmPassword
         )
-        if (!errors.isValid) {
-            _state.update { it.copy(errors = errors, generalError = null) }
+        if (!errors.isValid || !s.agreed) {
+            _state.update {
+                it.copy(
+                    errors = errors,
+                    consentError = if (s.agreed) null else PrivacyNotice.MSG_CONSENT_REQUIRED,
+                    generalError = null
+                )
+            }
             return
         }
 
@@ -157,7 +172,9 @@ class SignUpViewModel(
             // Same rule as Validators.contactNumber: spaces and dashes are not stored.
             contactNo = s.contactNo.filterNot { it == ' ' || it == '-' },
             // Always citizen. Responder and admin are only ever set in the Console / website.
-            role = Role.CITIZEN.value
+            role = Role.CITIZEN.value,
+            // The box was ticked to get here (onSignUpClick checks it). Kept as proof of consent.
+            consentAt = Timestamp.now()
             // address, purok and emergencyContact are filled in on the profile setup screen.
         )
 
