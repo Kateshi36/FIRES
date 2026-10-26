@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.fires.data.model.DeliveryState
 import com.example.fires.data.model.IncidentDelivery
+import com.example.fires.data.model.IncidentStatus
+import com.example.fires.data.model.statusEnum
 import com.example.fires.data.model.Severity
 import com.example.fires.data.model.fireTypeEnum
 import com.example.fires.data.model.severityEnum
@@ -33,7 +35,9 @@ data class AlertSentUiState(
     val fireTypeLabel: String = "",
     /** When the server stamped the report; null while it is only saved on the phone. */
     val sentAtMillis: Long? = null,
-    val hasPhoto: Boolean = false
+    val hasPhoto: Boolean = false,
+    /** Where the report is now, the same status the Track live status screen shows. */
+    val status: IncidentStatus = IncidentStatus.REPORTED
 )
 
 /**
@@ -73,5 +77,6 @@ private fun IncidentDelivery.toUiState() = AlertSentUiState(
     code = incident?.let { incidentCode(it.id) }.orEmpty(),
     fireTypeLabel = incident?.fireTypeEnum()?.label.orEmpty(),
     sentAtMillis = incident?.submittedAt?.toDate()?.time,
-    hasPhoto = incident?.hasPhoto == true
+    hasPhoto = incident?.hasPhoto == true,
+    status = incident?.statusEnum() ?: IncidentStatus.REPORTED
 )

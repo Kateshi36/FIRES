@@ -378,14 +378,11 @@ export async function removeAssignment(incidentId, responderId, local = I.find(i
   if (cached) drop(cached);
   return { ok: true, removed: mine.length };
 }
-// Removes a report's photo (a citizen asked for it, or it should not be kept). Rules: administrators only.
-// The report itself stays. Resolves { ok: true }, or { blocked: true } without an id.
-export async function removePhoto(incidentId, local = I.find(i => i.id === incidentId)) {
-  if (!incidentId) return { blocked: true };
-  await deleteDoc(doc(db, "incident_photos", incidentId));
-  photoCache.delete(incidentId);
-  if (local) { local.photoUrl = null; local.photo = false; }
-  return { ok: true };
+// The live positions of the responders on one incident (the app writes them while it is DISPATCHED).
+// Read-only; the rules let administrators read them. Returns the unsubscribe function.
+export function listenResponderLocations(incidentId, onChange, onError) {
+  return onSnapshot(collection(db, "incidents", incidentId, "responderLocations"),
+    snap => onChange(snap.docs.map(d => ({ id: d.id, data: d.data() }))), onError);
 }
 // Newest 60 entries, kept up to date. Returns the unsubscribe function.
 export function listenActivity(onChange, onError) {

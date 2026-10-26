@@ -84,6 +84,8 @@ th{text-transform:uppercase;letter-spacing:.04em;font-size:11px}
 .pin{background:none;border:0}
 .pin .dot{display:block;width:100%;height:100%;box-sizing:border-box;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
 .pin .dot.on{border-color:var(--ink)}
+.pin .rsp{display:block;width:100%;height:100%;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}
+.leaflet-tooltip.rtip{font:600 12px/1.2 system-ui,sans-serif;color:#1D4ED8;padding:3px 7px;border:1px solid #1D4ED8}
 .pin:focus-visible .dot{outline:3px solid var(--ink);outline-offset:2px}
 .pin .dot.act{animation:pd 1.8s ease-out infinite}
 @keyframes pd{0%{box-shadow:0 0 0 0 rgba(229,57,53,.5)}100%{box-shadow:0 0 0 14px rgba(229,57,53,0)}}
@@ -393,3 +395,4 @@ aside nav button{padding:0 12px}
   .phead{flex-wrap:wrap}
 }
 .aisec{margin:8px 0 0;padding-top:8px;border-top:1px solid var(--line)}.aisec:first-of-type{border-top:0;padding-top:0}
+.rrow{margin:6px 0}.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}.rgrid>div{background:var(--bg);border-radius:8px;padding:6px 8px}.rgrid small{display:block;color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em}.rgrid b{font-size:14px}

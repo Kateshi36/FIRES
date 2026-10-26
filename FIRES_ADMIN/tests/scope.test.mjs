@@ -69,9 +69,8 @@ test("the verify write has exactly three fields for each of the three actions, t
   }
 });
 
-test("the only deletes on the website are removeAssignment and removePhoto", () => {
+test("the only delete on the website is removeAssignment", () => {
   const d = code["js/data.js"];
-  assert.equal((d.match(/\bdeleteDoc\(/g) || []).length, 2);
-  assert.match(d, /deleteDoc\(doc\(db, "incident_photos", incidentId\)\)/);
+  assert.equal((d.match(/\bdeleteDoc\(/g) || []).length, 1);
   assert.match(d, /deleteDoc\(doc\(db, "incidents", incidentId, "assignments", d\.id\)\)/);
 });

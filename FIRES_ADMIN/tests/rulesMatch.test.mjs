@@ -64,3 +64,12 @@ test("activity log: the fields the website writes are all ones the rules accept,
   assert.match(block, /allow create: if isAdmin\(\)/);
   assert.match(block, /allow update, delete: if false;/);
 });
+
+test("the chat closes with the report: a message needs an open parent report", { skip }, () => {
+  const at = rules.indexOf("match /messages/{messageId}");
+  assert.ok(at >= 0);
+  const block = rules.slice(at, rules.indexOf("match /assignments", at));
+  assert.match(block, /function parentIsOpen\(\)/);
+  assert.match(block, /status in \['reported', 'verified', 'dispatched', 'on_scene'\]/);
+  assert.match(block, /allow create: if signedIn\(\)[\s\S]*&& parentIsOpen\(\)/);
+});

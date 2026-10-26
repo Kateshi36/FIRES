@@ -323,6 +323,43 @@ await test("Activity log: an administrator action leaves exactly one allowed lin
   assert.deepEqual(await page.locator(".trow").allTextContents(), ["Sound on new report", "Browser notification", "Warn if unassigned over 5 min"]);
 });
 
+await test("Responder location: shown in the drawer and on the map panel only while dispatched, and updates live", async page => {
+  await page.evaluate(() => {
+    const st = window.__fake.store, now = Date.now();
+    st["incidents/rep00001"].status = "dispatched"; st["incidents/rep00001"].latitude = 14.52; st["incidents/rep00001"].longitude = 121.05;
+    st["incidents/rep00001/responderLocations/u1"] = { latitude: 14.53, longitude: 121.06, etaSeconds: 420, distanceMeters: 2300, updatedAt: { __ts: now } };
+    window.__fake.emit();
+  });
+  await openFromRecords(page, "rep00001");
+  // a responder who is not assigned to this report is not shown, even if the phone shares a location
+  await page.waitForFunction(() => /Waiting for the responder/.test(document.querySelector("#rspw").textContent));
+  await page.evaluate(() => { window.__fake.store["incidents/rep00001/assignments/a1"] = { responderId: "u1", responderName: "Ana Cruz", unit: "Engine 1", assignedResources: [] }; window.__fake.emit(); });
+  await page.click("#cx");
+  await page.evaluate(() => { window.__fake.store["incidents/rep00001/responderLocations/u1"].updatedAt = { __ts: Date.now() }; });
+  await openFromRecords(page, "rep00001");
+  await page.waitForFunction(() => /On the way/.test(document.querySelector("#rspw").textContent));
+  const box = await page.locator("#rspw").textContent();
+  assert.match(box, /Ana Cruz/); assert.match(box, /ETA\s*about 7 min/); assert.match(box, /Distance\s*2\.3 km/);
+  // the app moves the responder: the drawer follows without a reload
+  await page.evaluate(() => { window.__fake.store["incidents/rep00001/responderLocations/u1"].latitude = 14.531; window.__fake.emit(); });
+  // the responder stops: waiting text
+  await page.evaluate(() => { delete window.__fake.store["incidents/rep00001/responderLocations/u1"]; window.__fake.emit(); });
+  await page.waitForFunction(() => /Waiting for the responder/.test(document.querySelector("#rspw").textContent));
+  await page.click("#cx");
+  // the live map side panel shows it too
+  await page.evaluate(() => { window.__fake.store["incidents/rep00001/responderLocations/u1"] = { latitude: 14.53, longitude: 121.06, etaSeconds: 300, updatedAt: { __ts: Date.now() } }; window.__fake.emit(); });
+  await page.click('aside button[data-t="map"]');
+  await page.waitForSelector("#side .card");
+  await page.waitForFunction(() => /On the way/.test(document.querySelector("#side").textContent) && /ETA/.test(document.querySelector("#side").textContent));
+  // a report that is not dispatched shows no responder line
+  await page.evaluate(() => { window.__fake.store["incidents/rep00001"].status = "verified"; window.__fake.emit(); });
+  await page.click('aside button[data-t="rec"]');
+  await page.waitForSelector("tbody tr[data-id]");
+  await page.click('tbody tr[data-id="rep00001"]');
+  await page.waitForSelector("#drawer.open");
+  assert.equal((await page.locator("#rspw").textContent()).trim(), "");
+});
+
 await browser.close(); server.close();
 console.log(failed ? `\n${failed} FAILED` : "\nall browser checks passed");
 process.exit(failed ? 1 : 0);

@@ -1,10 +1,11 @@
 import {
   U, I, RS, ACT, fl, photoBlock,
-  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, getPhotoUrl, saveAiPhoto, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, removePhoto, listenActivity,
+  loadUsers, loadIncidentsOnce, listenIncidents, incidentsAreFresh, loadActiveAssignments, loadDetail, getPhotoUrl, saveAiPhoto, loadRange, INCIDENT_LIMIT, RANGE_LIMIT, loadAssignmentsFor, logActivity, notifyAssigned, removeAssignment, listenActivity, listenResponderLocations,
   createResponderAuth, saveResponderProfile, sendResponderReset, changeUserRole, verifyIncident,
   newAssignmentId, saveAssignment, refreshAssignments
 } from "./data.js";
 import { esc, fmtPH } from "./mapping.js";
+import { mapResponderLocation, summarize, responderHtml, isTracked, panelModel, panelHtml } from "./responderRules.js";
 import {
   FIRE_TYPES, typeLabel, fireName, CHIPS, isClosedOut, filterRecords, chipCounts, applyChip, sortRecords, pageSlice, responderText, ageText,
   medianResolve, monthCounts, weeklyMedians, typeCounts, purokCounts, DAYS, HOUR_LABELS, hourHeat, busiestSlot, withinHour,
@@ -33,15 +34,15 @@ const mins=i=>Math.round((i.resolvedMs-i.submittedMs)/6e4);
 let openId=null;
 let toastTimer=null;
 function toast(t,ms=2200){const e=$("#toast");e.textContent=t;e.style.display="block";clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.style.display="none",ms)}
-function close(){openId=null;$("#drawer").classList.remove("open");$("#scrim").classList.remove("open")}
+function close(){openId=null;$("#drawer").classList.remove("open");$("#scrim").classList.remove("open");syncTrack()}
 function open(h){$("#drawer").innerHTML=h;$("#drawer").classList.add("open");$("#scrim").classList.add("open")}
 $("#scrim").onclick=close;
-document.querySelectorAll("aside nav button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll("aside nav button").forEach(x=>x.classList.toggle("on",x===b));close();render()});
+document.querySelectorAll("aside nav button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll("aside nav button").forEach(x=>x.classList.toggle("on",x===b));close();render();syncTrack()});
 function stats(){const done=I.filter(i=>i.dateResolved&&i.submittedMs!=null);return{total:I.length,active:I.filter(ACT).length,res:I.filter(i=>i.rawStatus==="resolved").length,avg:done.length?Math.round(done.reduce((a,i)=>a+mins(i),0)/done.length):0}}
 const screens={over,map,resp,rec,rep,act};
 let unsub=null,usersAt=0,renderSeq=0;
 const live=()=>tab==="over"||tab==="map"||tab==="act";
-const stopLive=()=>{if(unsub){unsub();unsub=null}if(unsubAct){unsubAct();unsubAct=null}};
+const stopLive=()=>{stopTrack();if(unsub){unsub();unsub=null}if(unsubAct){unsubAct();unsubAct=null}};
 // What the responder's phone shows when they are assigned or taken off a report (max 200 characters).
 const assignedText=i=>`${i.code} \u00B7 ${i.loc}. ${typeLabel(i.fireType)}${i.trapped?", possibly trapped":""}. Tap to open and start your response.`.slice(0,200);
 const removedText=i=>`An administrator took you off ${i.code}. No action needed.`;
@@ -380,17 +381,17 @@ for(let p=1;p<=pg.pages;p++){if(!keep.has(p))continue;if(p-prev>1)out.push('<spa
 return out.join("")}
 
 function detail(id){const i=findIncident(id);if(!i)return;
-openId=id;const p=loadDetail(i);drawerFor(i);p.then(()=>{if(openId===id)drawerFor(i)})}
+openId=id;const p=loadDetail(i);drawerFor(i);syncTrack();p.then(()=>{if(openId===id)drawerFor(i)})}
 function drawerFor(i){const ld=i.detailState==="loading",er=i.detailState==="error";
 const canRm=!ld&&!er&&i.assignLoaded===true&&canAssign(i);
 const asn=ld?"Loading...":er?"Could not load.":i.res.map(r=>`<div class="arow">${r[2]} - ${r[1]}${r[3].length?" ("+r[3].join(", ")+")":""}${canRm?` <button type="button" class="lnk rmasg" data-r="${esc(r[0])}">Remove</button>`:""}</div>`).join("")||"None assigned yet";
 const msg=ld?"Loading...":er?"Could not load.":i.msgs.map(m=>`<div class="msg"><b>${m[0]}</b><br>${m[1]}</div>`).join("")||"No messages";
 open(`<small class="muted">Incident</small><h2>${i.code}</h2><div class="pills"><span class="pill ${i.severity}">${i.severity}</span> <span class="pill ${i.status}">${i.status}</span></div>
-<div class="kv"><small>Photo from reporter</small>${photoBlock(i)}${i.photoUrl?` <button type="button" class="lnk" id="rmph">Remove photo</button>`:""}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
+<div class="kv"><small>Photo from reporter</small>${photoBlock(i)}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
 <div class="kv"><small>Submitted</small>${i.submittedAt}</div><div class="kv"><small>Date resolved</small>${i.dateResolved?i.dateResolved+" ("+mins(i)+" min)":ld?"Loading...":i.rawStatus==="resolved"?"Resolved (record not found)":"Not yet resolved"}</div>
 <div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${aiAdviceHtml(i,pcSt[i.id],aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
 <div class="step"><h3 class="stepn"><span>2</span>Responders</h3><div class="kv"><small>Assigned responders</small>${asn}${assignButtonHtml(i)}</div></div>
-<div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAdvice(i.id);wirePhotoRemove(i.id);startAdvice(i)}
+<div class="kv" id="rspw">${rspInner(i)}</div><div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAdvice(i.id);startAdvice(i)}
 // ---- AI photo check (advice only) ----
 // New open reports with a photo are checked one at a time (the Worker's limit is 12 a minute) while this
 // page is open on the live screens; any report can also be checked by hand from its drawer. The answer is
@@ -471,15 +472,6 @@ function askRemove(id,rid,from){
     done:async()=>{logAct("unassign",`removed ${plain(row[2])} from ${i.code}`,id);notifyAssigned(rid,id,removedText(i),"removed");toast("Responder removed.");afterAssign(id)}
   });
 }
-function wirePhotoRemove(id){const b=$("#rmph");if(b)b.onclick=()=>{
-  const i=findIncident(id);if(!i)return;
-  confirmDlg({
-    title:"Remove this photo?",
-    body:`The photo of ${i.code} will be deleted for good. The report stays. Do this only when the reporter asks, or the photo should not be kept.`,
-    confirm:"Remove photo",from:b,
-    run:()=>removePhoto(id,i),
-    done:async()=>{logAct("photo",`removed the photo of ${i.code}`,id);toast("Photo removed.");drawerFor(i)}
-  })}}
 function wireAssign(id){const b=$("#asg");if(b)b.onclick=()=>askAssign(id,b)}
 // The Assign dialog. W13.16: the report and the responder list (accounts with the responder role from U, without
 // the ones already assigned, or a short message when nobody is left). W13.17: the unit select, preselected from the
@@ -718,12 +710,12 @@ $("#xact").onclick=()=>{if(!evs.length){toast("The log is empty.");return}saveCs
 }
 // Live map (W9): Leaflet + OpenStreetMap. The map is created once per visit to this tab and kept,
 // so a new report or a click updates markers and the side panel without resetting zoom or position.
-let selId=null,mf="act",lmap=null,mlayer=null,fitted=false;
+let selId=null,mf="act",lmap=null,mlayer=null,rlayer=null,fitted=false,mapCur=null;
 const markers=new Map();
 const SEV_COLOR={Critical:"#8F1D14",High:"#D3281C",Medium:"#B45309",Low:"#16803D"},GREY="#8d8482";
 // Text is stored HTML-escaped (see mapping.js); decode it for places that need plain text (tooltips).
 const plain=h=>{const t=document.createElement("textarea");t.innerHTML=h;return t.value};
-function destroyMap(){if(lmap){lmap.remove();lmap=null}mlayer=null;markers.clear();fitted=false}
+function destroyMap(){if(lmap){lmap.remove();lmap=null}mlayer=null;rlayer=null;markers.clear();fitted=false}
 function pinIcon(i,on){const c=i.active?(SEV_COLOR[i.severity]||GREY):GREY,z=on?26:20;
 return L.divIcon({className:"pin",html:`<span class="dot${on?" on":""}${i.active?" act":""}" style="background:${c}"></span>`,iconSize:[z,z],iconAnchor:[z/2,z/2]})}
 function buildMap(){
@@ -731,13 +723,13 @@ destroyMap();
 $("#main").innerHTML=`<h1>Live map</h1><p class="lead">Where each emergency is, plotted from the latitude and longitude in the incident report.</p>
 <div class="chips" role="group" aria-label="Filter map">${[["act","Active"],["all","All"],["Resolved","Resolved"],["Duplicate","Duplicate"],["False","False"]].map(([v,t])=>`<button type="button" class="chip${mf===v?" on":""}" data-f="${v}" aria-pressed="${mf===v}">${t}</button>`).join("")}</div>
 <div class="mapwrap"><div><div class="card mapbox"><div id="lmap" role="region" aria-label="Map of incidents"></div></div>
-<div class="legend"><span><i style="background:#8F1D14"></i>Critical</span><span><i style="background:#D3281C"></i>High</span><span><i style="background:#B45309"></i>Medium</span><span><i style="background:#16803D"></i>Low</span><span><i style="background:#8d8482"></i>Not active</span></div></div>
+<div class="legend"><span><i style="background:#8F1D14"></i>Critical</span><span><i style="background:#D3281C"></i>High</span><span><i style="background:#B45309"></i>Medium</span><span><i style="background:#16803D"></i>Low</span><span><i style="background:#8d8482"></i>Not active</span><span><i style="background:#1D4ED8"></i>Responder</span></div></div>
 <div id="side"></div></div>`;
 document.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{mf=b.dataset.f;fitted=false;document.querySelectorAll(".chip").forEach(c=>{const on=c.dataset.f===mf;c.classList.toggle("on",on);c.setAttribute("aria-pressed",on)});map()});
 if(typeof L==="undefined"){$("#lmap").innerHTML='<p class="muted" style="padding:16px">The map could not load. Check your internet connection and reload the page.</p>';return}
 lmap=L.map("lmap").setView([14.52,121.05],13);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).addTo(lmap);
-mlayer=L.layerGroup().addTo(lmap);
+mlayer=L.layerGroup().addTo(lmap);rlayer=L.layerGroup().addTo(lmap);
 requestAnimationFrame(()=>{if(lmap)lmap.invalidateSize()})}
 function map(){
 if(!$("#lmap"))buildMap();
@@ -754,11 +746,73 @@ m.setZIndexOffset(on?1000:0)});
 [...markers.keys()].forEach(id=>{if(!keep.has(id)){mlayer.removeLayer(markers.get(id));markers.delete(id)}});
 if(!fitted&&keep.size){fitted=true;const pts=[...keep].map(id=>{const i=I.find(x=>x.id===id);return[i.lat,i.lng]});
 if(pts.length===1)lmap.setView(pts[0],16);else lmap.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:16})}}
+mapCur=cur?cur.id:null;drawResponders(list);
 $("#side").innerHTML=(cur?`<div class="card" style="margin-bottom:12px"><span class="muted">Selected incident</span><h3 style="margin:2px 0 8px;font-size:22px">${cur.code}</h3><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><span class="pill ${cur.severity}">${cur.severity}</span><span class="pill ${cur.status}">${cur.status}</span> ${fl(cur)}</div>${cur.photoUrl?photoBlock(cur)+"<br>":""}<div class="kv" style="margin-top:0"><small>Location</small>${cur.loc}</div><div class="kv"><small>Coordinates (${cur.locSource})</small>${cur.lat!=null?cur.lat.toFixed(4)+", "+cur.lng.toFixed(4):"None"}</div><div class="kv"><small>Responders</small>${cur.res.map(r=>r[2]+" - "+r[1]).join("<br>")||"None assigned yet"}</div><button class="btn" id="dt" style="width:100%">Open full record</button></div>`:"")+
 (list.length>1?`<small class="muted" style="display:block;margin:4px 2px 8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Other incidents</small>`:"")+
 list.filter(x=>!cur||x.id!==cur.id).map(x=>`<div class="li" data-id="${x.id}" tabindex="0" role="button"><b>${x.code}</b> <span class="pill ${x.severity}">${x.severity}</span><br><span class="muted">${x.loc}</span></div>`).join("")||(cur?"":`<div class="card muted">No incidents match this filter.</div>`);
-if(cur)$("#dt").onclick=()=>detail(cur.id);
+if(cur){$("#dt").onclick=()=>detail(cur.id);addRspSide(cur)}syncTrack();
 document.querySelectorAll(".li").forEach(e=>{e.onclick=()=>pick(e.dataset.id);e.onkeydown=k=>{if(k.key==="Enter"||k.key===" "){k.preventDefault();pick(e.dataset.id)}}})}
+// Responder locations (W14). While a report is dispatched, the phone of each responder who tapped "Start response"
+// writes its position. The website listens to the reports shown on the live map (at most MAX_TRACK) and to the one open
+// in the drawer. The app deletes the location when the responder stops or arrives.
+const MAX_TRACK=12;
+const trk=new Map();                       // incident id -> { unsub, locs, err }
+let trkTimer=null;
+const nameOf=id=>{const u=U.find(x=>x.id===id);return u&&u.name?u.name:"A responder"};
+// Only a responder who is assigned to this report is shown (the assignment list is i.res: [responderId, unit, name, resources]).
+const rspSummary=i=>{const t=trk.get(i.id),asg=new Set((i.res||[]).map(r=>r[0]));
+  return summarize(i.rawStatus,t?t.locs.filter(l=>asg.has(l.id)):[],Date.now(),nameOf)};
+function stopTrack(){trk.forEach(t=>{if(t.unsub)t.unsub()});trk.clear();if(trkTimer){clearInterval(trkTimer);trkTimer=null}}
+function trackWanted(){
+  const want=new Set();
+  if(openId){const i=findIncident(openId);if(i&&isTracked(i.rawStatus))want.add(i.id)}
+  if(tab==="map")I.filter(i=>isTracked(i.rawStatus)&&ACT(i)).slice(0,MAX_TRACK).forEach(i=>want.add(i.id));
+  return want}
+function syncTrack(){
+  const want=trackWanted();
+  [...trk.keys()].forEach(id=>{if(!want.has(id)){const t=trk.get(id);if(t.unsub)t.unsub();trk.delete(id)}});
+  want.forEach(id=>{
+    if(trk.has(id))return;
+    const t={unsub:null,locs:[],err:false};trk.set(id,t);
+    t.unsub=listenResponderLocations(id,list=>{
+      if(trk.get(id)!==t)return;
+      t.err=false;t.locs=list.map(x=>mapResponderLocation(x.id,x.data,Date.now())).filter(Boolean);repaintTrack()
+    },()=>{if(trk.get(id)===t){t.err=true;t.locs=[];repaintTrack()}})});
+  if(trk.size&&!trkTimer)trkTimer=setInterval(repaintTrack,20000);   // "updated 20 s ago" and the 60 s "no longer live" change with time alone
+  if(!trk.size&&trkTimer){clearInterval(trkTimer);trkTimer=null}}
+function repaintTrack(){
+  if(openId){const i=findIncident(openId),el=$("#rspw");if(i&&el)el.innerHTML=rspInner(i)}
+  if(tab==="map"&&$("#lmap"))map()}
+// The Responder box: one row per assigned responder, with the ETA and the distance here (not on the map label).
+function rspPanel(i){
+  const t=trk.get(i.id),m=panelModel(i.rawStatus,(i.res||[]).map(r=>({id:r[0],name:nameOf(r[0])})),t?t.locs:[],Date.now());
+  return{m,html:t&&t.err&&m.kind!=="none"?"<div>Could not load the responder location.</div>":panelHtml(m)}}
+function rspInner(i){const p=rspPanel(i);return p.m.kind==="none"?"":`<small>Responder</small>${p.html}`}
+function addRspSide(cur){
+  const p=rspPanel(cur),c=document.querySelector("#side .card");
+  if(!c||p.m.kind==="none")return;
+  c.insertAdjacentHTML("beforeend",`<div class="rspn" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line,#e5e0de)"><span class="muted">Responder</span>${p.html}</div>`)}
+// An arrow that points where the responder is heading (degrees from north); a round dot when the phone gave no heading.
+function rspIcon(h){
+  const arrow=h==null?'<circle cx="12" cy="12" r="8" fill="#1D4ED8" stroke="#fff" stroke-width="3"/>'
+    :'<path d="M12 1.5 L21 22 L12 17.5 L3 22 Z" fill="#1D4ED8" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>';
+  return L.divIcon({className:"pin",html:`<span class="rsp" style="transform:rotate(${h==null?0:Math.round(h)}deg)"><svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">${arrow}</svg></span>`,iconSize:[32,32],iconAnchor:[16,16]})}
+function drawResponders(list){
+  try{drawRespondersNow(list)}catch(e){console.warn("responder markers",e)}}   // a map hiccup must never break the page
+function drawRespondersNow(list){
+  if(!rlayer)return;
+  rlayer.clearLayers();
+  (list||[]).forEach(i=>{
+    if(i.lat==null||!isTracked(i.rawStatus))return;
+    rspSummary(i).items.forEach(x=>{
+      // Where the responder has just driven, then the road route still ahead (a dashed straight line when there is none).
+      if(x.trail.length>1)L.polyline(x.trail,{color:"#64748B",weight:4,opacity:x.fresh?.7:.3}).addTo(rlayer);
+      if(x.route.length>1){
+        L.polyline(x.route,{color:"#fff",weight:9,opacity:x.fresh?.9:.4}).addTo(rlayer);
+        L.polyline(x.route,{color:"#1D4ED8",weight:5,opacity:x.fresh?.95:.45}).addTo(rlayer)}
+      else L.polyline([[x.lat,x.lng],[i.lat,i.lng]],{color:"#1D4ED8",weight:4,opacity:x.fresh?.85:.35,dashArray:"6 8"}).addTo(rlayer);
+      const m=L.marker([x.lat,x.lng],{icon:rspIcon(x.heading),title:x.line,alt:x.line,opacity:x.fresh?1:.5,keyboard:false}).addTo(rlayer);
+      m.bindTooltip(esc(x.name),{permanent:true,direction:"top",offset:[0,-16],className:"rtip"})})})}
 const pick=id=>{selId=id;map();const i=I.find(x=>x.id===id);if(lmap&&i&&i.lat!=null)lmap.panTo([i.lat,i.lng])};
 document.addEventListener("click",e=>{const t=e.target.closest(".ph");if(t){const i=I.find(x=>x.id===t.dataset.id);if(!i||!i.photoUrl)return;$("#lb").innerHTML=`<img src="${i.photoUrl}" alt="Enlarged photo for ${i.code}">`;$("#lb").classList.add("open")}else if(e.target.closest("#lb"))$("#lb").classList.remove("open")});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#lb").classList.remove("open")});

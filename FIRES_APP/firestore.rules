@@ -279,8 +279,15 @@ service cloud.firestore {
 
         // Only the reporter and staff can write in a chat. The sender must be the caller, and
         // the role label must be the caller's REAL role, so a citizen cannot post as a responder.
+        // The chat closes with the report: nothing can be added once it is resolved or dismissed.
+        function parentIsOpen() {
+          return exists(parentIncident())
+            && get(parentIncident()).data.status in ['reported', 'verified', 'dispatched', 'on_scene'];
+        }
+
         allow create: if signedIn()
           && (isStaff() || isReporterOfParent())
+          && parentIsOpen()
           && onlyKeys(['senderId', 'senderName', 'senderRole', 'messageText', 'sentAt'])
           && request.resource.data.senderId == request.auth.uid
           && request.resource.data.senderRole == myRole()
@@ -428,8 +435,7 @@ service cloud.firestore {
         && request.resource.data.sizeBytes is int
         && request.resource.data.sizeBytes <= 700000;
 
-      // Only an administrator can remove a photo (a citizen's request to delete their image).
-      allow delete: if isAdmin();
+      // Nobody can delete a photo: it is part of the report's evidence.
     }
 
     // =====================================================================
@@ -470,7 +476,7 @@ service cloud.firestore {
     match /activity/{entryId} {
       function validActivity(d) {
         return d.keys().hasOnly(['type', 'text', 'actorId', 'actorName', 'incidentId', 'createdAt'])
-          && d.type in ['verify', 'false', 'duplicate', 'assign', 'unassign', 'role', 'create', 'photo']
+          && d.type in ['verify', 'false', 'duplicate', 'assign', 'unassign', 'role', 'create']
           && isText(d.text, 200)
           && d.actorId == request.auth.uid
           && isText(d.actorName, 80)

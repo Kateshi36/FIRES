@@ -140,7 +140,7 @@ fun ChatContent(
                     }
 
                     state.items.isEmpty() -> Text(
-                        text = "No messages yet. Send a message to start the conversation.",
+                        text = if (ChatRules.isChatClosed(incident?.statusEnum())) "There were no messages on this report." else "No messages yet. Send a message to start the conversation.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.Center).padding(32.dp)
@@ -154,9 +154,19 @@ fun ChatContent(
                 ErrorBanner(it, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
             }
 
+            val closed = ChatRules.isChatClosed(incident?.statusEnum())
+            if (closed) {
+                ToneBanner(
+                    text = ChatRules.closedText(state.isReporter),
+                    tone = Tone.GREY,
+                    icon = Icons.Filled.Lock,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                )
+            }
+
             // One-tap texts for the person who reported the fire. They go into the box, so nothing
             // is sent by a slip of the thumb.
-            if (state.isReporter) {
+            if (state.isReporter && !closed) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,7 +180,7 @@ fun ChatContent(
                 }
             }
 
-            MessageInput(draft = draft, onDraftChange = onDraftChange, onSend = onSend)
+            if (!closed) MessageInput(draft = draft, onDraftChange = onDraftChange, onSend = onSend)
         }
     }
 }

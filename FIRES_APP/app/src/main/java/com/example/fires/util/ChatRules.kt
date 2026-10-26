@@ -1,5 +1,6 @@
 package com.example.fires.util
 
+import com.example.fires.data.model.IncidentStatus
 import com.example.fires.data.model.Role
 import java.time.Instant
 import java.time.ZoneId
@@ -25,6 +26,20 @@ data class ChatItem(
 object ChatRules {
     const val MAX_LENGTH = 500
     const val SENDING_LABEL = "Sending…"
+
+    /** Shown instead of the message box once the report is resolved or dismissed. */
+    const val CLOSED_TEXT_REPORTER =
+        "This report is closed, so the chat is closed too. If there is a new fire, send a new report or call the barangay hotline."
+    const val CLOSED_TEXT_RESPONDER = "This report is closed. The messages stay here to read, but no one can write in this chat anymore."
+
+    fun closedText(isReporter: Boolean): String = if (isReporter) CLOSED_TEXT_REPORTER else CLOSED_TEXT_RESPONDER
+
+    /**
+     * The chat is open while the report is open. A resolved or dismissed report keeps its messages to read,
+     * but nobody can write in it (firestore.rules refuses it as well). Until the report has loaded we do not
+     * know, so the box stays; the server decides.
+     */
+    fun isChatClosed(status: IncidentStatus?): Boolean = status != null && !status.isActive
 
     /** What actually gets sent: leading/trailing blanks removed. */
     fun clean(text: String): String = text.trim()

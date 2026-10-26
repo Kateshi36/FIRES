@@ -1,5 +1,6 @@
 package com.example.fires.util
 
+import com.example.fires.data.model.IncidentStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -12,6 +13,20 @@ class ChatRulesTest {
         senderId: String = "u1", name: String = "Ana", role: String = "citizen",
         sentAt: Long? = now - 120_000, me: String? = "u1"
     ) = ChatRules.item("m1", senderId, name, role, "hello", sentAt, me, now) { "DATE" }
+
+    @Test fun chatIsClosed_onlyForResolvedAndDismissedReports() {
+        assertFalse(ChatRules.isChatClosed(null))   // report not loaded yet: the server decides
+        for (s in listOf(IncidentStatus.REPORTED, IncidentStatus.VERIFIED, IncidentStatus.DISPATCHED, IncidentStatus.ON_SCENE))
+            assertFalse(s.value, ChatRules.isChatClosed(s))
+        assertTrue(ChatRules.isChatClosed(IncidentStatus.RESOLVED))
+        assertTrue(ChatRules.isChatClosed(IncidentStatus.DISMISSED))
+    }
+
+    @Test fun closedNotice_isDifferentForTheReporterAndTheResponder() {
+        assertTrue(ChatRules.closedText(true).contains("new report"))
+        assertFalse(ChatRules.closedText(false).contains("new report"))
+        assertFalse(ChatRules.closedText(false).contains("hotline"))
+    }
 
     @Test fun blankMessage_cannotBeSent() {
         assertFalse(ChatRules.canSend(""))

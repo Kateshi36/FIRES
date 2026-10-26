@@ -141,13 +141,13 @@ fun AlertSentContent(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        SentRules.title(state.delivery),
+                        SentRules.title(state.delivery, state.status),
                         style = MaterialTheme.typography.headlineMedium,
                         textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        SentRules.subtitle(state.delivery),
+                        SentRules.subtitle(state.delivery, state.status),
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -184,7 +184,7 @@ fun AlertSentContent(
 
                 if (!failed) {
                     Spacer(Modifier.height(24.dp))
-                    NextStepsCard(SentRules.steps(state.delivery, state.sentAtMillis, state.hasPhoto))
+                    NextStepsCard(SentRules.steps(state.delivery, state.sentAtMillis, state.hasPhoto, state.status))
                     Spacer(Modifier.height(16.dp))
                     ToneBanner(
                         text = SentRules.KEEP_PHONE_NEARBY,
