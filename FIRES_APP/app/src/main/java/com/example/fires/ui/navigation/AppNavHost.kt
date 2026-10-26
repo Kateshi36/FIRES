@@ -92,6 +92,24 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
     val scope = rememberCoroutineScope()
     var chatTabMessage by remember { mutableStateOf<String?>(null) }
 
+    // The Chat tab only exists while the citizen has a report that is still open. Once every report is
+    // resolved or dismissed the tab disappears, because that chat is closed.
+    var hasOpenReport by remember { mutableStateOf(false) }
+    val signedInUid = authRepo.currentUid
+    LaunchedEffect(signedInUid) {
+        hasOpenReport = false
+        val uid = signedInUid ?: return@LaunchedEffect
+        try {
+            IncidentRepository().observeMine(uid).collect { list ->
+                hasOpenReport = list.any { it.statusEnum().isActive }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Leave the tab hidden; it comes back on the next successful update.
+        }
+    }
+
     // Moves between the tabs without stacking them: everything above Home is popped first.
     fun openTab(route: String) = navController.navigate(route) {
         popUpTo(Routes.CITIZEN_HOME)
@@ -121,7 +139,8 @@ fun AppNavHost(navController: NavHostController = rememberNavController()) {
             onHome = { if (!navController.popBackStack(Routes.CITIZEN_HOME, false)) openTab(Routes.CITIZEN_HOME) },
             onReports = { openTab(Routes.MY_REPORTS) },
             onChat = { openChatTab() },
-            onProfile = { openTab(Routes.PROFILE) }
+            onProfile = { openTab(Routes.PROFILE) },
+            showChat = hasOpenReport
         )
     }
 

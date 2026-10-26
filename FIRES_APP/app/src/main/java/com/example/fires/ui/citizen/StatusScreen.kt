@@ -148,7 +148,8 @@ fun StatusContent(
                 }
             }
 
-            if (incident != null) {
+            // No chat button once the report is resolved or dismissed: that chat is closed.
+            if (incident != null && incident.statusEnum().isActive) {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                     PrimaryButton(text = "Open chat", onClick = onOpenChat)
                 }

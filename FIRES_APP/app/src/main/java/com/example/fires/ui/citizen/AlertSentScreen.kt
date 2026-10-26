@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
+import com.example.fires.util.ChatRules
 import com.example.fires.util.Hotline
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -207,8 +208,10 @@ fun AlertSentContent(
                     } else {
                         SecondaryButton(text = "Track live status", onClick = onViewStatus)
                     }
-                    Spacer(Modifier.height(10.dp))
-                    SecondaryButton(text = "Add a message", onClick = onAddMessage)
+                    if (!ChatRules.isChatClosed(state.status)) {
+                        Spacer(Modifier.height(10.dp))
+                        SecondaryButton(text = "Add a message", onClick = onAddMessage)
+                    }
                 } else {
                     SecondaryButton(text = "Back to home", onClick = onBack)
                 }

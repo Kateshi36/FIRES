@@ -25,7 +25,9 @@ fun CitizenBottomBar(
     onHome: () -> Unit,
     onReports: () -> Unit,
     onChat: () -> Unit,
-    onProfile: () -> Unit
+    onProfile: () -> Unit,
+    /** False when the citizen has no open report: the Chat tab is then not shown at all. */
+    showChat: Boolean = true
 ) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -39,10 +41,12 @@ fun CitizenBottomBar(
             selected = selected == CitizenTab.REPORTS, onClick = onReports,
             icon = { Icon(Icons.Filled.Description, contentDescription = null) }, label = { Text("My reports") }
         )
-        NavigationBarItem(
-            selected = selected == CitizenTab.CHAT, onClick = onChat,
-            icon = { Icon(Icons.Filled.ChatBubbleOutline, contentDescription = null) }, label = { Text("Chat") }
-        )
+        if (showChat) {
+            NavigationBarItem(
+                selected = selected == CitizenTab.CHAT, onClick = onChat,
+                icon = { Icon(Icons.Filled.ChatBubbleOutline, contentDescription = null) }, label = { Text("Chat") }
+            )
+        }
         NavigationBarItem(
             selected = selected == CitizenTab.PROFILE, onClick = onProfile,
             icon = { Icon(Icons.Filled.Person, contentDescription = null) }, label = { Text("Profile") }
