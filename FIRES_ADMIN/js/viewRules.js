@@ -44,12 +44,21 @@ export function chipCounts(list) {
 }
 export const applyChip = (list, id) => list.filter((CHIPS.find(c => c.id === id) || CHIPS[0]).test);
 
-// sort: "sev" = most severe first, then newest; "new" = newest first.
+// sort: "sev" = most severe first, then newest; "sevlow" = least severe first, then oldest;
+//       "new" = newest first; "old" = oldest first. Clicking a column header flips it (nextSort).
 export function sortRecords(list, sort) {
-  const by = sort === "new"
-    ? (a, b) => (b.submittedMs || 0) - (a.submittedMs || 0)
-    : (a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0) || (b.submittedMs || 0) - (a.submittedMs || 0);
+  const sev = (a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0) || (b.submittedMs || 0) - (a.submittedMs || 0);
+  const by = sort === "new" ? (a, b) => (b.submittedMs || 0) - (a.submittedMs || 0)
+    : sort === "old" ? (a, b) => (a.submittedMs || 0) - (b.submittedMs || 0)
+    : sort === "sevlow" ? (a, b) => sev(b, a)
+    : sev;
   return [...list].sort(by);
+}
+
+// What a click on a column header does: the same column flips its direction, the other column starts at its default.
+export function nextSort(current, column) {
+  if (column === "sev") return current === "sev" ? "sevlow" : "sev";
+  return current === "new" ? "old" : "new";
 }
 
 export function pageSlice(list, page, size = 10) {

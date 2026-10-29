@@ -396,3 +396,18 @@ aside nav button{padding:0 12px}
 }
 .aisec{margin:8px 0 0;padding-top:8px;border-top:1px solid var(--line)}.aisec:first-of-type{border-top:0;padding-top:0}
 .rrow{margin:6px 0}.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}.rgrid>div{background:var(--bg);border-radius:8px;padding:6px 8px}.rgrid small{display:block;color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.05em}.rgrid b{font-size:14px}
+
+/* Loading placeholder, weekly chart values */
+.skel{display:grid;gap:12px;padding:8px 0}
+.skel i{display:block;height:46px;border-radius:12px;background:var(--line);opacity:.55;animation:skl 1.2s ease-in-out infinite}
+.skel i:first-child{height:28px;width:40%}
+@keyframes skl{50%{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.skel i{animation:none}}
+.wkvals{gap:14px;margin-top:6px}
+.wkvals span{flex:1;text-align:center;display:flex;flex-direction:column;font-size:11px}
+.wkvals b{color:var(--ink);font-size:12px;font-weight:700}
+
+/* Severity / Type dropdowns: make the open list readable in both themes (the reset above left white text on a white list) */
+select.selbtn{color-scheme:light dark;appearance:none;-webkit-appearance:none;padding-right:30px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 17px) 55%,calc(100% - 12px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;min-width:130px}
+select.selbtn option{background:var(--card);color:var(--ink);font:600 14px 'Figtree',system-ui,sans-serif}
+select.selbtn:hover{border-color:var(--mute)}

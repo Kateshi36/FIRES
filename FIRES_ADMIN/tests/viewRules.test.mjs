@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  typeLabel, needsReview, isClosedOut, filterRecords, chipCounts, applyChip, sortRecords, pageSlice, responderText, ageText,
+  typeLabel, needsReview, isClosedOut, filterRecords, chipCounts, applyChip, sortRecords, nextSort, pageSlice, responderText, ageText,
   median, medianResolve, monthCounts, weeklyMedians, typeCounts, purokCounts, hourHeat, busiestSlot, withinHour,
   incidentEvents, mergeEvents, filterEvents, dayHeading, clockText, activityDoc, newReports, unassignedTooLong
 } from "../js/viewRules.js";
@@ -161,4 +161,17 @@ test("report wording: the right article for each fire type", async () => {
   assert.equal(withArticle(fireName("electrical")), "an electrical fire");
   assert.equal(withArticle(fireName("other")), "a fire");
   assert.equal(withArticle(fireName("???")), "a fire");
+});
+
+test("sortRecords and nextSort: a column header flips its direction", () => {
+  const mk = (id, severity, submittedMs) => ({ id, severity, submittedMs });
+  const a = mk("a1", "Low", 1), b = mk("b1", "Critical", 2), c = mk("c1", "Low", 3);
+  assert.deepEqual(sortRecords([a, b, c], "sevlow").map(i => i.id), ["a1", "c1", "b1"]);
+  assert.deepEqual(sortRecords([a, b, c], "old").map(i => i.id), ["a1", "b1", "c1"]);
+  assert.equal(nextSort("sev", "sev"), "sevlow");
+  assert.equal(nextSort("sevlow", "sev"), "sev");
+  assert.equal(nextSort("new", "sev"), "sev");
+  assert.equal(nextSort("new", "new"), "old");
+  assert.equal(nextSort("old", "new"), "new");
+  assert.equal(nextSort("sev", "new"), "new");
 });

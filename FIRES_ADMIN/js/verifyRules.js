@@ -120,8 +120,10 @@ export const drawerAfterReview = incident =>
 // Nothing here comes from a citizen: labels are constants and the error text is ours (escaped anyway).
 export function reviewBlockHtml(incident, st = {}) {
   if (!canVerify(incident)) return "";
-  const busy = st.busy === true;
-  const label = b => (busy && st.kind === b.kind ? "Saving..." : st.error && st.kind === b.kind ? "Try again" : b.label);
+  // wait: the report's details are still loading and the drawer will be redrawn once, so the buttons stay
+  // disabled until then (a click on a button that is about to be replaced would be lost).
+  const busy = st.busy === true || st.wait === true;
+  const label = b => (st.busy === true && st.kind === b.kind ? "Saving..." : st.error && st.kind === b.kind ? "Try again" : b.label);
   const buttons = VERIFY_BUTTONS.map(b =>
     `<button class="btn${b.primary ? "" : " ghost"}" data-rv="${b.kind}"${busy ? " disabled" : ""}>${label(b)}</button>`).join("");
   return `<div class="kv" id="rvw"><small>Review this report</small>`

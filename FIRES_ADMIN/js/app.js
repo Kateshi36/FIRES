@@ -7,7 +7,7 @@ import {
 import { esc, fmtPH } from "./mapping.js";
 import { mapResponderLocation, summarize, responderHtml, isTracked, panelModel, panelHtml } from "./responderRules.js";
 import {
-  FIRE_TYPES, typeLabel, fireName, CHIPS, isClosedOut, filterRecords, chipCounts, applyChip, sortRecords, pageSlice, responderText, ageText,
+  FIRE_TYPES, typeLabel, fireName, CHIPS, isClosedOut, filterRecords, chipCounts, applyChip, sortRecords, nextSort, pageSlice, responderText, ageText,
   medianResolve, monthCounts, weeklyMedians, typeCounts, purokCounts, DAYS, HOUR_LABELS, hourHeat, busiestSlot, withinHour,
   ACTIVITY_CHIPS, kindInfo, incidentEvents, mergeEvents, filterEvents, dayHeading, clockText, activityDoc, newReports, unassignedTooLong
 } from "./viewRules.js";
@@ -67,7 +67,7 @@ async function render(){
       if(tab==="act"&&!unsubAct)unsubAct=listenActivity(list=>{actEvents=list;if(tab==="act")act()},e=>console.warn("activity read failed",e));
       if(tab!=="act"&&unsubAct){unsubAct();unsubAct=null}
       if(!unsub){
-        if(!incidentsAreFresh())$("#main").innerHTML='<p class="muted">Loading...</p>';
+        if(!incidentsAreFresh())$("#main").innerHTML='<div class="skel" aria-busy="true" aria-label="Loading"><i></i><i></i><i></i><i></i><i></i></div>';
         else drawLive();
         // Listener: new reports appear without refreshing. Stopped when the tab changes (below).
         unsub=listenIncidents(drawLive,e=>{if(auth.currentUser)showError(e)});
@@ -76,7 +76,7 @@ async function render(){
     }
     stopLive();
     if(tab==="rep"){await repShow(my);return}   // Reports load their own date range (W12)
-    if(!incidentsAreFresh()||tab==="resp"&&Date.now()-usersAt>6e4)$("#main").innerHTML='<p class="muted">Loading...</p>';
+    if(!incidentsAreFresh()||tab==="resp"&&Date.now()-usersAt>6e4)$("#main").innerHTML='<div class="skel" aria-busy="true" aria-label="Loading"><i></i><i></i><i></i><i></i><i></i></div>';
     if(!incidentsAreFresh())await loadIncidentsOnce();
     if(tab==="resp"&&Date.now()-usersAt>6e4){await loadUsers();usersAt=Date.now()}
     if(my!==renderSeq)return;
@@ -103,6 +103,8 @@ addEventListener("online",syncConn);addEventListener("offline",syncConn);
 const names=r=>r[0][2]+(r.length>1?` +${r.length-1}`:"");   // assignment names are already HTML-escaped (mapAssignment)
 
 // ---- Overview ----
+// Short time for the chart labels: minutes under an hour, hours under two days, then days.
+const shortMin=m=>{const n=Math.round(m);if(n<60)return n+" min";if(n<2880){const h=Math.round(n/6)/10;return h+" h"}const d=Math.round(n/144)/10;return d+" d"};
 function over(){
 const now=Date.now(),mc=monthCounts(I,now),med=medianResolve(I.filter(x=>x.rawStatus==="resolved")),
 awaiting=I.filter(i=>i.active&&i.rawStatus==="reported").length,busy=new Set();
@@ -113,15 +115,15 @@ const wk=weeklyMedians(I,now),mx=Math.max(1,...wk.map(w=>w.value||0)),lastWk=wk[
 $("#main").innerHTML=head(greeting(),`${todayText()} · live`,`${connHtml()}<button class="btn" id="exp">Export records</button>`)+
 `<section class="kpis">
 <div class="card kpi"><span class="kl">Active incidents</span><span class="kb acc">${I.filter(ACT).length}</span><span class="kn">${awaiting} awaiting verification</span></div>
-<div class="card kpi"><span class="kl">Reports this month</span><span class="kb">${mc.thisMonth}</span><span class="kn">${diff===0?"Same as last month":Math.abs(diff)+(diff>0?" more":" fewer")+" than last month"}</span></div>
+<div class="card kpi"><span class="kl">Reports this month</span><span class="kb">${mc.thisMonth}</span><span class="kn">${mc.lastMonth===0&&mc.thisMonth>0?"No reports last month":diff===0?"Same as last month":Math.abs(diff)+(diff>0?" more":" fewer")+" than last month"}</span></div>
 <div class="card kpi"><span class="kl">Median time to resolve</span><span class="kb">${med==null?"-":Math.round(med)}${med==null?"":'<span class="u"> min</span>'}</span><span class="kn">${I.filter(x=>x.rawStatus==="resolved").length} resolved in the loaded reports</span></div>
 <div class="card kpi"><span class="kl">Responders</span><span class="kb">${RS().length}</span><span class="kn">${busy.size} currently assigned</span></div></section>
 <section class="split"><div class="card panel grow2"><div class="phead"><h2>Needs attention</h2><button type="button" class="lnkbtn" id="orec">Open records</button></div>
 <div class="wrap"><table class="mt"><thead><tr><th>Location</th><th>Severity</th><th>Status</th><th>Assigned</th><th>Age</th></tr></thead><tbody>${attn.map(i=>`<tr tabindex="0" data-id="${i.id}"><td><b>${i.loc}</b><br><span class="muted">${i.code}</span></td><td><span class="pill ${i.severity}">${i.severity}</span></td><td><span class="pill ${i.status}">${i.status}</span> ${fl(i)}</td><td>${i.res.length?names(i.res):`<span class="lnk">${i.rawStatus==="reported"?"Review":"Assign"}</span>`}</td><td class="muted">${ageText(i.submittedMs,now)}</td></tr>`).join("")||'<tr><td colspan="5" class="muted">No open incidents right now.</td></tr>'}</tbody></table></div></div>
 <div class="card panel grow1"><div class="phead"><h2>Time to resolve, last 6 weeks</h2></div>
-<div class="wkchart" role="img" aria-label="Median minutes to resolve per week, last six weeks">${wk.map((w,k)=>`<div class="wkbar${k===wk.length-1?" cur":""}${w.value==null?" none":""}" style="height:${w.value==null?2:Math.max(6,w.value/mx*100)}%" title="Week ${k+1}: ${w.value==null?"nothing resolved":Math.round(w.value)+" min (median)"}"></div>`).join("")}</div>
-<div class="wklab"><span>Wk 1</span><span>Wk 6</span></div>
-<p class="muted small">Median minutes from report to resolved, per week. ${lastWk&&lastWk.value!=null?`Latest week: ${Math.round(lastWk.value)} min.`:"Nothing was resolved in the latest week."}</p></div></section>`;
+<div class="wkchart" role="img" aria-label="Median minutes to resolve per week, last six weeks">${wk.map((w,k)=>`<div class="wkbar${k===wk.length-1?" cur":""}${w.value==null?" none":""}" style="height:${w.value==null?2:Math.max(6,w.value/mx*100)}%" title="Week ${k+1}: ${w.value==null?"nothing resolved":shortMin(w.value)+" (median)"}"></div>`).join("")}</div>
+<div class="wklab wkvals">${wk.map((w,k)=>`<span>W${k+1}<b>${w.value==null?"-":shortMin(w.value)}</b></span>`).join("")}</div>
+<p class="muted small">Median minutes from report to resolved, per week. ${lastWk&&lastWk.value!=null?`Latest week: ${shortMin(lastWk.value)}.`:"Nothing was resolved in the latest week."}</p></div></section>`;
 $("#exp").onclick=()=>{if(!I.length){toast("There are no records to export yet.");return}saveCsvFile(reportCsv(I),`fires-records-${todayPH()}.csv`)};
 $("#orec").onclick=()=>goTab("rec");
 document.querySelectorAll("tbody tr[data-id]").forEach(t=>{t.onclick=()=>detail(t.dataset.id);t.onkeydown=e=>{if(e.key==="Enter")detail(t.dataset.id)}})}
@@ -331,7 +333,7 @@ $("#d1").oninput=$("#d2").oninput=()=>{rs.d1=$("#d1").value;rs.d2=$("#d2").value
 $("#dclr").onclick=()=>{rs.d1=rs.d2="";$("#d1").value=$("#d2").value="";rs.page=1;drawRec()};
 $("#dbtn").onclick=()=>{rs.dates=!rs.dates;$("#dpop").hidden=!rs.dates;$("#dbtn").setAttribute("aria-expanded",rs.dates)};
 $("#rprint").onclick=()=>window.print();
-document.querySelectorAll(".thb").forEach(b=>b.onclick=()=>{rs.sort=b.dataset.s;rs.page=1;drawRec()});
+document.querySelectorAll(".thb").forEach(b=>b.onclick=()=>{rs.sort=nextSort(rs.sort,b.dataset.s);rs.page=1;drawRec()});
 $("#selall").onchange=()=>{const ids=recPage.items.map(i=>i.id);ids.forEach(id=>$("#selall").checked?rs.sel.add(id):rs.sel.delete(id));drawRec()};
 drawRec()}
 let recPage={items:[]},recList=[];
@@ -358,7 +360,7 @@ $("#dbtn").innerHTML=(d1||d2?`${d1||"..."} to ${d2||"..."}`:"All dates")+' <span
 $("#rsub").textContent=`${recList.length} report${recList.length===1?"":"s"} in this view · click a row to open the review drawer`;
 $("#rchips").innerHTML=CHIPS.map(c=>`<button type="button" class="chip${rs.chip===c.id?" on":""}" data-c="${c.id}" aria-pressed="${rs.chip===c.id}">${c.label} · ${counts[c.id]}</button>`).join("");
 document.querySelectorAll("#rchips .chip").forEach(b=>b.onclick=()=>{rs.chip=b.dataset.c;rs.page=1;drawRec()});
-document.querySelectorAll(".thb").forEach(b=>b.textContent=b.dataset.s==="sev"?"Severity"+(rs.sort==="sev"?" ↓":""):"Reported"+(rs.sort==="new"?" ↓":""));
+document.querySelectorAll(".thb").forEach(b=>{const sv=b.dataset.s==="sev",on=sv?rs.sort==="sev"||rs.sort==="sevlow":rs.sort==="new"||rs.sort==="old",up=rs.sort==="sevlow"||rs.sort==="old";b.textContent=(sv?"Severity":"Reported")+(on?(up?" ↑":" ↓"):"");b.title=sv?"Sort by severity (click to reverse)":"Sort by date reported (click to reverse)";b.setAttribute("aria-sort",on?(up?"ascending":"descending"):"none")});
 const n=rs.sel.size;
 $("#selbar").innerHTML=n?`<div class="selbar noprint"><span>${n} selected</span><span class="selact"><button type="button" class="btn light sm" id="xsel">Export selected (CSV)</button><button type="button" class="btn light sm" id="clrsel">Clear</button></span></div>`:"";
 if(n){
@@ -389,7 +391,7 @@ const msg=ld?"Loading...":er?"Could not load.":i.msgs.map(m=>`<div class="msg"><
 open(`<small class="muted">Incident</small><h2>${i.code}</h2><div class="pills"><span class="pill ${i.severity}">${i.severity}</span> <span class="pill ${i.status}">${i.status}</span></div>
 <div class="kv"><small>Photo from reporter</small>${photoBlock(i)}</div><div class="kv"><small>Description</small>${i.description}</div><div class="kv"><small>Location</small>${i.loc}</div><div class="kv"><small>Reported by</small>${i.reporterName}${i.reporterContact?" ("+i.reporterContact+")":""}</div>
 <div class="kv"><small>Submitted</small>${i.submittedAt}</div><div class="kv"><small>Date resolved</small>${i.dateResolved?i.dateResolved+" ("+mins(i)+" min)":ld?"Loading...":i.rawStatus==="resolved"?"Resolved (record not found)":"Not yet resolved"}</div>
-<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${aiAdviceHtml(i,pcSt[i.id],aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,rv.id===i.id?rv:{})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
+<div class="kv"><small>Review flags</small>${fl(i)||"None"}</div>${aiAdviceHtml(i,pcSt[i.id],aiSt[i.id],AI_ENDPOINT,I)}<div class="step"><h3 class="stepn"><span>1</span>Review</h3>${reviewBlockHtml(i,{...(rv.id===i.id?rv:{}),wait:ld})}</div><div class="kv"><small>Remarks</small>${i.remarks||"None yet"}</div>
 <div class="step"><h3 class="stepn"><span>2</span>Responders</h3><div class="kv"><small>Assigned responders</small>${asn}${assignButtonHtml(i)}</div></div>
 <div class="kv" id="rspw">${rspInner(i)}</div><div class="kv"><small>Messages</small>${msg}</div><button class="btn ghost" id="cx">Close</button>`);$("#cx").onclick=close;wireReview(i.id);wireAssign(i.id);wireRemove(i.id);wireAdvice(i.id);startAdvice(i)}
 // ---- AI photo check (advice only) ----
@@ -721,7 +723,7 @@ return L.divIcon({className:"pin",html:`<span class="dot${on?" on":""}${i.active
 function buildMap(){
 destroyMap();
 $("#main").innerHTML=`<h1>Live map</h1><p class="lead">Where each emergency is, plotted from the latitude and longitude in the incident report.</p>
-<div class="chips" role="group" aria-label="Filter map">${[["act","Active"],["all","All"],["Resolved","Resolved"],["Duplicate","Duplicate"],["False","False"]].map(([v,t])=>`<button type="button" class="chip${mf===v?" on":""}" data-f="${v}" aria-pressed="${mf===v}">${t}</button>`).join("")}</div>
+<div class="chips" role="group" aria-label="Filter map">${[["act","Active"],["all","All"],["Resolved","Resolved"],["Duplicate","Duplicate"],["False","False"]].map(([v,t])=>`<button type="button" class="chip${mf===v?" on":""}" data-f="${v}" aria-pressed="${mf===v}">${t} · ${I.filter(i=>v==="act"?ACT(i):v==="all"||i.status===v).length}</button>`).join("")}</div>
 <div class="mapwrap"><div><div class="card mapbox"><div id="lmap" role="region" aria-label="Map of incidents"></div></div>
 <div class="legend"><span><i style="background:#8F1D14"></i>Critical</span><span><i style="background:#D3281C"></i>High</span><span><i style="background:#B45309"></i>Medium</span><span><i style="background:#16803D"></i>Low</span><span><i style="background:#8d8482"></i>Not active</span><span><i style="background:#1D4ED8"></i>Responder</span></div></div>
 <div id="side"></div></div>`;
@@ -747,7 +749,7 @@ m.setZIndexOffset(on?1000:0)});
 if(!fitted&&keep.size){fitted=true;const pts=[...keep].map(id=>{const i=I.find(x=>x.id===id);return[i.lat,i.lng]});
 if(pts.length===1)lmap.setView(pts[0],16);else lmap.fitBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:16})}}
 mapCur=cur?cur.id:null;drawResponders(list);
-$("#side").innerHTML=(cur?`<div class="card" style="margin-bottom:12px"><span class="muted">Selected incident</span><h3 style="margin:2px 0 8px;font-size:22px">${cur.code}</h3><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><span class="pill ${cur.severity}">${cur.severity}</span><span class="pill ${cur.status}">${cur.status}</span> ${fl(cur)}</div>${cur.photoUrl?photoBlock(cur)+"<br>":""}<div class="kv" style="margin-top:0"><small>Location</small>${cur.loc}</div><div class="kv"><small>Coordinates (${cur.locSource})</small>${cur.lat!=null?cur.lat.toFixed(4)+", "+cur.lng.toFixed(4):"None"}</div><div class="kv"><small>Responders</small>${cur.res.map(r=>r[2]+" - "+r[1]).join("<br>")||"None assigned yet"}</div><button class="btn" id="dt" style="width:100%">Open full record</button></div>`:"")+
+$("#side").innerHTML=(cur?`<div class="card" style="margin-bottom:12px"><span class="muted">Selected incident</span><h3 style="margin:2px 0 8px;font-size:22px">${cur.code}</h3><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"><span class="pill ${cur.severity}">${cur.severity}</span><span class="pill ${cur.status}">${cur.status}</span> ${fl(cur)}</div>${cur.photoUrl?photoBlock(cur)+"<br>":""}<div class="kv" style="margin-top:0"><small>Location</small>${/^-?\d+\.\d+, -?\d+\.\d+$/.test(cur.loc)?"Pinned location (no address)":cur.loc}</div><div class="kv"><small>Coordinates (${cur.locSource})</small>${cur.lat!=null?cur.lat.toFixed(4)+", "+cur.lng.toFixed(4):"None"}</div><div class="kv"><small>Responders</small>${cur.res.map(r=>r[2]+" - "+r[1]).join("<br>")||"None assigned yet"}</div><button class="btn" id="dt" style="width:100%">Open full record</button></div>`:"")+
 (list.length>1?`<small class="muted" style="display:block;margin:4px 2px 8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Other incidents</small>`:"")+
 list.filter(x=>!cur||x.id!==cur.id).map(x=>`<div class="li" data-id="${x.id}" tabindex="0" role="button"><b>${x.code}</b> <span class="pill ${x.severity}">${x.severity}</span><br><span class="muted">${x.loc}</span></div>`).join("")||(cur?"":`<div class="card muted">No incidents match this filter.</div>`);
 if(cur){$("#dt").onclick=()=>detail(cur.id);addRspSide(cur)}syncTrack();
@@ -816,6 +818,8 @@ function drawRespondersNow(list){
 const pick=id=>{selId=id;map();const i=I.find(x=>x.id===id);if(lmap&&i&&i.lat!=null)lmap.panTo([i.lat,i.lng])};
 document.addEventListener("click",e=>{const t=e.target.closest(".ph");if(t){const i=I.find(x=>x.id===t.dataset.id);if(!i||!i.photoUrl)return;$("#lb").innerHTML=`<img src="${i.photoUrl}" alt="Enlarged photo for ${i.code}">`;$("#lb").classList.add("open")}else if(e.target.closest("#lb"))$("#lb").classList.remove("open")});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#lb").classList.remove("open")});
+// Escape also closes the side panel, unless a dialog or the photo preview is on top.
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#drawer").classList.contains("open")&&!$("#dlg").classList.contains("open")&&!$("#lb").classList.contains("open"))close()});
 
 // Guard (W6). The page stays hidden (style#guard in index.html) until this check finishes.
 // It only decides what the page shows; the real protection is firestore.rules.
@@ -838,7 +842,7 @@ onAuthStateChanged(auth,async user=>{
   boot();
 });
 async function boot(){
-  $("#main").innerHTML='<p class="muted">Loading...</p>';
+  $("#main").innerHTML='<div class="skel" aria-busy="true" aria-label="Loading"><i></i><i></i><i></i><i></i><i></i></div>';
   try{await loadUsers();usersAt=Date.now()}catch(e){showError(e,boot);return}
   render();
 }
